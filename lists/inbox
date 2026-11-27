@@ -2,7 +2,6 @@ kanban/tickets/review-the-actor-pointer-form.md
 kanban/tickets/list-map-xs-x-x-10.md
 kanban/tickets/js-an-empty-list-equals-null.md
 kanban/tickets/a-pure-value-mid-body-is-dropped-silently.md
-kanban/tickets/the-board-app-writes-stale-lists-over-a-newer-move.md
 kanban/tickets/lists-of-functions-as-runtime-values.md
 kanban/tickets/spelled-out-constructor-returns-an-actor-literal.md
 kanban/tickets/a-makers-style-element-styles-the-elements-it-makes.md
