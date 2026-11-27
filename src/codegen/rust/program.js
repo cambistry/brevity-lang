@@ -1,3 +1,4 @@
+import { hasInterface } from '../../actor_interface.js';
 // The state key of each name an actor answers `$get` for, by class ("" is the
 // file) and wire token, and whether it's a public cell (open to anyone). The
 // `$get` arms and outer reads both read through it (src/outer_reads.js).
@@ -3090,7 +3091,7 @@ function codegenRust(ast, options = {}) {
   G.ctx.fileName = options.fileName;
   const _isPublic = f => f.name && (f.name.startsWith('@') || f.name === 'set' || f.name === 'update' || f.name.startsWith('set@') || f.name.startsWith('subscribe@') || f.name.startsWith('new@') || f.name === 'new');
   // A class with no functions of its own still has to be constructible.
-  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic));
+  const active = ast.actors.filter(a => a.asClauses?.length > 0 || !!a.name || a.functions.some(_isPublic) || hasInterface(a, ast));
   if (active.length === 0) return '';
   G.ctx.actorInfo = new Map();
   // A public singleton is published under the actor that builds it, which needs

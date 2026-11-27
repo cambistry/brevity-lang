@@ -81,7 +81,6 @@ describe('type imports — destructured type binding', () => {
     const { ast } = extract(`
       use :Point = "geometry.bv"
       type Point(Integer, Integer)
-      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/collides with local 'Point'/);
@@ -121,7 +120,6 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
       type User(Geom::Point)
-      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] })).not.toThrow();
   });
@@ -130,7 +128,6 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
     const { ast } = extract(`
       use Geom = "geometry.bv"
       type User(Geom::NoSuch)
-      @noop = () -> ok: 1
     `);
     expect(() => compile(ast, { remotes: [{ path: 'geometry.bv', service: remoteIface }] }))
       .toThrow(/'NoSuch' is not exported by 'Geom'/);
@@ -139,7 +136,6 @@ describe('type imports — cross-module type refs (Service::Name)', () => {
   it('rejects Alias::Name when Alias is not a declared dependency', () => {
     const { ast } = extract(`
       type User(NoSuch::Point)
-      @noop = () -> ok: 1
     `);
     expect(() => compile(ast)).toThrow(/unknown dependency alias 'NoSuch'/);
   });

@@ -1,3 +1,4 @@
+import { hasInterface } from '../../actor_interface.js';
 // ── Program-level codegen for Erlang ─────────────────────────────────────────
 
 import { dependencyAddressing } from '../dep_address.js';
@@ -2285,7 +2286,7 @@ export function codegenErlang(ast, options = {}) {
   lowerChains(ast);
   // A file with only public classes still answers their `#new`.
   // A class with no functions of its own still has to be constructible.
-  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update'));
+  const isActive = a => a.asClauses?.length > 0 || !!a.name || a.functions.some(f => f.name && (f.name.startsWith('@') || f.name.startsWith('new@') || f.name === 'set' || f.name === 'update')) || hasInterface(a, ast);
   const active = ast.actors.filter(isActive);
   if (active.length === 0) return '';
 

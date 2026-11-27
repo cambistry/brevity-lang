@@ -48,7 +48,6 @@ describe('extract — params rendering', () => {
   it('bare service DI renders as key: with no type', () => {
     const { interface: iface } = extract(`
       use DB = "/db"
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "/db":\n)');
   });
@@ -67,7 +66,6 @@ describe('extract — params rendering', () => {
   it('an unclaimed dependency renders with no type — its type is its document', () => {
     const { interface: iface } = extract(`
       use Thing = "thing.bv"
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "thing.bv":\n)');
   });
@@ -99,7 +97,6 @@ describe('extract — params rendering', () => {
         t Text
         n Integer
       *
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  Text\n  Integer\n)');
   });
@@ -110,7 +107,6 @@ describe('extract — params rendering', () => {
         t Text
         limit: Integer
       *
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  Text\n  "limit": Integer\n)');
   });
@@ -118,7 +114,6 @@ describe('extract — params rendering', () => {
   it('a dependency key is always quoted', () => {
     const { interface: iface } = extract(`
       use App = "my-app.bv"
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "my-app.bv":\n)');
   });
@@ -128,7 +123,6 @@ describe('extract — params rendering', () => {
       use DB = "/db"
       use value Integer = value
       use Thing = "thing.bv"
-      @noop. = {}
     `);
     expect(iface.params).toBe(
       '(\n  "/db":\n  "value": Integer\n  "thing.bv":\n)',
@@ -138,7 +132,6 @@ describe('extract — params rendering', () => {
   it('does not surface the local alias (DB) in params', () => {
     const { interface: iface } = extract(`
       use DB = "/db"
-      @noop. = {}
     `);
     expect(iface.params).not.toContain('DB');
   });
@@ -157,7 +150,6 @@ describe('extract — params rendering', () => {
     const { interface: iface } = extract(`
       use :div, :span = HTML
       use :Box = Shapes
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "HTML":\n  "Shapes":\n)');
   });
@@ -311,12 +303,10 @@ describe('params document — read back as constructor params', () => {
       t Text
       limit: Integer
     *
-    @noop. = {}
   `).interface;
   const consumer = (call) => extract(`
     use Svc = "svc.bv"
-    s = ${call}
-    @noop. = {}
+    @make = () -> ${call}
   `).ast;
   const remotes = [{ path: 'svc.bv', params: remote.params, service: remote.service }];
 
@@ -333,7 +323,6 @@ describe('params document — read back as constructor params', () => {
       use DB = "/db" as { get (key: Text) -> (value: Text) }
       use Lib = "lib.bv" as *(a: Integer, b: Text) -> { ping. () => . }
       use lim Integer = limit
-      @noop. = {}
     `).interface;
     expect(typed.params).toBe(
       '(\n  "/db": {\n    get (key: Text) -> (value: Text)\n  }\n' +

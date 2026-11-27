@@ -16,3 +16,5 @@ Problem (checked 2026-11-25):
 - Only private names (`#f = -> 1`): compiles. It should be a compile error.
 
 Done when protected-only actors build on rust and erlang, a private-only actor is a compile error, and every `@noop` that exists only to make an actor build is gone. Files with one: __tests__/types/type_interface.test.js, types/type_imports.test.js, marshal/capture.test.js, cam_test/get.test.js, cam_test/set.test.js, destructure/params.test.js, functions/overload.test.js, services/interface.test.js, services/extract.test.js, syntax/unexpected.test.js.
+
+**Decided (2026-11-26):** an actor is valid when it has a public function or cell, a protected name, a published param, a `self as` clause, a `new` or a public class, or a `type` declaration. One with only private names (`#f`), `use` lines included, is a compile error, raised when compiling, not by `extract`. The message states the rule. `@noop`s that test something real (`@noop = Function()`, a void reply's doc entry) stay.

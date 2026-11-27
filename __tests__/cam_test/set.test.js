@@ -142,7 +142,6 @@ describe('test.set — target child actor', () => {
       end#Box
 
       b = *Box(0)
-      @noop = () -> 1
   `;
 
   it('sets child state via target then reads via target', async () => {
@@ -170,7 +169,6 @@ describe('test.set — nested target', () => {
         .
 
       o = *Outer()
-      @noop = () -> 1
   `;
 
   it('sets grandchild state via dotted target', async () => {
@@ -193,7 +191,6 @@ describe('test.get — target child actor', () => {
         .
 
       b = *Box(42)
-      @noop = () -> 1
   `;
 
   it('reads child state via target', async () => {

@@ -103,7 +103,7 @@ describe('unseparated input', () => {
   });
 
   it('header entries on one line with no comma', () => {
-    expect(() => compileSource('*\n  t Text      limit: Integer\n*\n@noop. = {}\n')).toThrow("got IDENT 'limit'");
+    expect(() => compileSource('*\n  t Text      limit: Integer\n*\n')).toThrow("got IDENT 'limit'");
   });
 
   it('a leading comma in a header', () => {
@@ -128,7 +128,7 @@ describe('unseparated input', () => {
 // statement of the block.
 describe('a name with no `=`', () => {
   it('`f -> x` is a one-param function value, an expression statement: it declares nothing', () => {
-    expect(() => compileSource('f -> true\n')).not.toThrow();
+    expect(() => compileSource('f -> true\n@g = () -> 1\n')).not.toThrow();
   });
 
   it('`f (n Integer) -> x` is a call with no comma', () => {

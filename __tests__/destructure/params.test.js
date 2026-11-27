@@ -261,7 +261,6 @@ describe('destructure params — extraction', () => {
   it('single destructure renders in iface.params (key only; the destructure is a binding)', () => {
     const { interface: iface } = extract(`
       use :Point = "geometry.bv"
-      @noop. = {}
     `);
     expect(iface.params).toBe('(\n  "geometry.bv":\n)');
   });
@@ -269,7 +268,6 @@ describe('destructure params — extraction', () => {
   it('multiple destructures render in iface.params', () => {
     const { interface: iface } = extract(`
       use :Element, :div, :p = "dom.bv"
-      @noop. = {}
     `);
     expect(iface.params).toContain('dom.bv');
   });
@@ -277,7 +275,6 @@ describe('destructure params — extraction', () => {
   it('aliased destructure renders in iface.params', () => {
     const { interface: iface } = extract(`
       use Func: fn, CONFIG: cfg Text = "service.bv"
-      @noop. = {}
     `);
     expect(iface.params).toContain('service.bv');
   });

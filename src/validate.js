@@ -1,3 +1,4 @@
+import { hasInterface } from './actor_interface.js';
 // Shared semantic validation pass — runs between parse() and codegen.
 // Every target (JS, Erlang, Rust) gets the same checks.
 
@@ -1144,6 +1145,12 @@ function validateProgram(ast, options = {}) {
   // Last, so every check above reads `as` as written.
   lowerAs(ast);
   lowerBranchOrder(ast);
+  // The file's actor answers something (src/actor_interface.js); one with only
+  // private names reaches no one. After the other checks, so theirs come first.
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  if (fileActor && !hasInterface(fileActor, ast)) {
+    throw new Error('This actor has nothing anyone can reach: give it a public or protected name');
+  }
 }
 
 // A `...` call never writes the silent dot, so the parser supplies it
@@ -3377,12 +3384,18 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       else if (s.type === 'TypedAssign' && !isCall(callSrc)) checkAnnotationValue(s, valueType(callSrc), actorByName);
     }
 
-    // Constructor call validation in function bodies
-    const callExpr = s.type === 'ExprStatement' ? s.expr : s.value;
-    if (callExpr?.type === 'FunctionCallExpr' && callExpr.callee?.type === 'Identifier'
-        && dependencyNames.has(callExpr.callee.name) && factoryDecls[callExpr.callee.name]) {
-      validateConstructorCall(callExpr, factoryDecls, typeEnv);
-    }
+    // A dependency's construction anywhere in the statement: its value, a reply, an arg.
+    const constructs = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(constructs); return; }
+      if (n.type === 'Function') return;
+      if (n.type === 'FunctionCallExpr' && n.callee?.type === 'Identifier'
+          && dependencyNames.has(n.callee.name) && factoryDecls[n.callee.name]) {
+        validateConstructorCall(n, factoryDecls, typeEnv);
+      }
+      for (const k in n) constructs(n[k]);
+    };
+    constructs(s);
 
     // as-clause type check on TypedAssign + FunctionCallExpr (actor construction)
     if (s.type === 'TypedAssign' && s.value?.type === 'FunctionCallExpr' && s.value.callee?.name && actorInfo) {

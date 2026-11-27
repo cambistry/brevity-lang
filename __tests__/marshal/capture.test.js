@@ -16,7 +16,6 @@ const initialCapture = `
     a *Integer = 0
     b *Text = ""
     c *Boolean = false
-    @noop = () -> x
 `;
 
 describe('capture — single state var', () => {
@@ -60,7 +59,6 @@ describe('capture — null and zero values', () => {
 const mutationCapture = `
     x *Integer = 0
     @inc! = { x <- x + 1; return :x }
-    @noop = () -> x
 `;
 
 describe('capture — state after mutation', () => {
@@ -156,7 +154,6 @@ describe('capture — keys are wire labels', () => {
   const script = `
     a *Integer = 1
     @a *Integer = 2
-    @noop = () -> a
   `;
 
   it('a and @a are different cells', async () => {
