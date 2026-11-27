@@ -4,3 +4,4 @@ kanban/tickets/lambda-params-take-their-types-from-the-slot.md
 kanban/tickets/files-as-addressed-values-dir-and-file.md
 kanban/tickets/a-type-declaration-carries-a-namespace-of-functions.md
 kanban/tickets/class-ancestry.md
+kanban/tickets/valueless-attributes.md
