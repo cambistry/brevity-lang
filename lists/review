@@ -1,4 +1,3 @@
-kanban/finished/filter-find-map-sum-in-the-shape-of-over.md
 kanban/finished/list-concat-and-list-sort.md
 kanban/finished/publish-an-actor-of-a-class-nested-deeper-in-an-instance.md
 kanban/finished/double-check-for-dead-code-paths-with-removal-of-ingest.md
@@ -13,4 +12,3 @@ kanban/finished/a-call-on-an-actor-typed-cell-leaks-an-internal-name.md
 kanban/finished/a-private-silent-function-that-writes-is-not-defined-at-its-calls.md
 kanban/finished/a-private-zero-arity-function-computing-from-a-cell-is-not-defined.md
 kanban/finished/over-and-reduce-accept-an-integer-as-the-list.md
-kanban/finished/js-a-send-inside-a-compound-expression-isn-t-awaited.md
