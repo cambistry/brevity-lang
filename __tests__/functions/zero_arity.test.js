@@ -79,6 +79,22 @@ describe('zero-arity calls without parens', () => {
       return C().inc!.inc!.total
     }
 
+    m *Integer = 3
+    top = () -> m + 1
+    D = *{ @get = () -> top() }
+    @setM! = { m <- 10 }
+    @fromCell = {
+      p Integer = top()
+      q Integer = top
+      return p, q
+    }
+    @fromCellBare = { return top }
+    @fromCellInClass = {
+      d = D()
+      v Integer = d.get()
+      return v
+    }
+
     @launch = {
       c = C()
       c.inc!...
@@ -162,6 +178,19 @@ describe('zero-arity calls without parens', () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'launch', from: 'c' } },
       { output: { id: '1', re: [6], 'ty': ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('a protected function computing from a cell, by its name, here and in a class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'fromCell', from: 'c' } },
+      { output: { id: '1', re: [4, 4], ty: ['Integer', 'Integer'], to: 'c' } },
+      { input: { id: '2', op: 'setM!', from: 'c' } },
+      { output: expect.objectContaining({ id: '2', to: 'c' }) },
+      { input: { id: '3', op: 'fromCellBare', from: 'c' } },
+      { output: { id: '3', re: [11], to: 'c' } },
+      { input: { id: '4', op: 'fromCellInClass', from: 'c' } },
+      { output: { id: '4', re: [11], ty: ['Integer'], to: 'c' } },
     );
   });
 });

@@ -313,6 +313,39 @@ export function assignClosureAddresses(ast) {
       counter++;
     }
   }
+  renameClosureCalls(ast);
+}
+
+// A call to a renamed closure by its name (`top()`, or bare `top`) goes to its new
+// name, in its actor and in the classes declared in the file, unless a function
+// or a class there binds the name itself.
+function renameClosureCalls(ast) {
+  const fileActor = (ast.actors || []).find(a => !a.name);
+  const renamesOf = (actor) => new Map((actor.functions || []).filter(f => f.sourceName).map(f => [f.sourceName, f.name]));
+  const fileRenames = fileActor ? renamesOf(fileActor) : new Map();
+  for (const actor of (ast.actors || [])) {
+    const own = new Set((actor.functions || []).map(f => f.sourceName ?? f.name));
+    const renames = new Map([...(actor === fileActor ? [] : [...fileRenames].filter(([n]) => !own.has(n))), ...renamesOf(actor)]);
+    if (renames.size === 0) continue;
+    const bound = (fn) => new Set([...(fn.params || []).map(p => p.name), ...(Array.isArray(fn.body) ? fn.body : []).filter(st => st.name).map(st => st.name)]);
+    const walk = (node, shadow) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(n => walk(n, shadow)); return; }
+      if (node.type === 'Function' || node.type === 'FunctionDecl') shadow = new Set([...shadow, ...bound(node)]);
+      if (node.type === 'Identifier' && renames.has(node.name) && !shadow.has(node.name)) node.name = renames.get(node.name);
+      // A reply's bare positional name (`return top`) is that function's call.
+      if ((node.type === 'Reply' || node.type === 'Return') && Array.isArray(node.fields)) {
+        for (const f of node.fields) {
+          if (f.positional && !f.expr && renames.has(f.name) && !shadow.has(f.name)) {
+            f.expr = { type: 'FunctionCallExpr', callee: { type: 'Identifier', name: renames.get(f.name) }, args: [] };
+            delete f.name;
+          }
+        }
+      }
+      for (const k of Object.keys(node)) if (k !== 'type' && node[k] && typeof node[k] === 'object') walk(node[k], shadow);
+    };
+    walk([actor.functions, actor.constructorBody, actor.initBody], new Set());
+  }
 }
 
 export function injectFileParamsIntoFileActor(ast) {
