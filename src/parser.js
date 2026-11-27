@@ -197,7 +197,8 @@ const STRUCTURAL_TOKENS = new Set(['NEWLINE', 'BLOCK_SEP', 'DIVIDER', 'LPAREN', 
 
 function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = null, typeNamesRead = null, remotes = null } = {}) {
   const { tokens: joined, written: ownCellWrites } = joinOwnCellWrites(tokensIn);
-  let tokens = foldSelfClass(joined);
+  // A pass may splice tokens in (`|>`), so it owns its array.
+  let tokens = foldSelfClass(joined).slice();
   const fileTokens = tokens;
   let pos = 0;
   // A name's node keeps the line it was read on (`loc`), for the errors about it
@@ -370,10 +371,18 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // meaning in the tree. A token read and dropped, or skipped, is a parser bug
   // (checkTokensAccounted). A rewound parse reads a token again, so only a
   // take of its last read counts.
-  const readAt = new Int32Array(fileTokens.length);
-  const takenAt = new Int32Array(fileTokens.length);
+  const readAt = new Array(fileTokens.length).fill(0);
+  const takenAt = new Array(fileTokens.length).fill(0);
   const readIn = [];
   let reads = 0;
+  // Tokens spliced in at `at` (a `|>`'s value): the read marks move with the tokens.
+  const spliceTokens = (at, inserted) => {
+    tokens.splice(at, 0, ...inserted);
+    if (tokens !== fileTokens) return;
+    readAt.splice(at, 0, ...inserted.map(() => 0));
+    takenAt.splice(at, 0, ...inserted.map(() => 0));
+    readIn.splice(at, 0, ...inserted.map(() => undefined));
+  };
   const consume = () => {
     const at = pos;
     const tok = tokens[pos++];
@@ -2581,6 +2590,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   }
 
   function parsePrimary() {
+    // The value a `|>` pipes in, where splicePipedValue put it.
+    if (peek().type === 'PIPED_VALUE') return take().value;
     // `use("source")` is an expression: the dependency the host supplies. Any other
     // `use` reached here is a statement in an inner scope (the file's own are read
     // as declarations, parseActorBodyIn), or a source with no parens.
@@ -3031,15 +3042,71 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       const updateOp = takeOp().type === 'UPDATE' ? '<|' : undefined;
       return { type: 'SetExpr', name, value: parseExpr(), updateOp };
     }
-    const value = parseOrExpr();
+    const value = parsePipeExpr();
     if (!atWriteOp()) return value;
     if (!inWriteRhs) throw new Error("The left side of '<-' must be a cell");
     const rest = [];
     while (atWriteOp()) {
       const updateOp = takeOp().type === 'UPDATE' ? '<|' : undefined;
-      rest.push({ value: parseOrExpr(), updateOp });
+      rest.push({ value: parsePipeExpr(), updateOp });
     }
     return { type: 'SetChain', first: value, rest };
+  }
+
+  // `v |> f(a)` is `f(v, a)`: the lowest binary operator, left-associative
+  // (notes/pipe-and-clause-lists-settled-2026-11-26.md). The right side is a call or
+  // a bare callee. The value goes in as the call's first argument, by a token that
+  // stands for it, so every call form reads it as any argument: `f(v, a)`, `f(v)`.
+  // A line may start with `|>`, continuing the one before.
+  const atPipe = () => {
+    if (peek().type === 'PIPE_FWD') return true;
+    let k = pos;
+    while (tokens[k]?.type === 'NEWLINE') k++;
+    return k > pos && tokens[k]?.type === 'PIPE_FWD';
+  };
+  const closeOf = (open) => {
+    const [o, c] = tokens[open].type === 'LPAREN' ? ['LPAREN', 'RPAREN'] : ['LBRACKET', 'RBRACKET'];
+    for (let j = open, depth = 0; j < tokens.length; j++) {
+      if (tokens[j].type === o) depth++;
+      else if (tokens[j].type === c && --depth === 0) return j;
+      else if (tokens[j].type === 'EOF') return -1;
+    }
+    return -1;
+  };
+  // Splices the piped value into the callee at `pos`: after the `(` of its last call,
+  // or as `(value)` after a bare name. False when what follows isn't a callee.
+  function splicePipedValue(value) {
+    let j = pos;
+    if (tokens[j]?.type === 'AT') j++;
+    if (tokens[j]?.type !== 'IDENT' && !(tokens[j]?.type === 'KEYWORD' && ['self', 'base', 'class'].includes(tokens[j].value))) return false;
+    j++;
+    let lastCall = -1;
+    for (;;) {
+      const t = tokens[j]?.type;
+      if ((t === 'DOT' || t === 'DCOLON') && tokens[j + 1]?.type === 'IDENT') { j += 2; lastCall = -1; continue; }
+      if (t === 'LPAREN' || (t === 'LBRACKET' && !tokens[j].spaced)) {
+        const close = closeOf(j);
+        if (close < 0) return false;
+        lastCall = t === 'LPAREN' ? j : -1;
+        j = close + 1;
+        continue;
+      }
+      break;
+    }
+    const piped = { type: 'PIPED_VALUE', value };
+    if (lastCall >= 0) spliceTokens(lastCall + 1, tokens[lastCall + 1].type === 'RPAREN' ? [piped] : [piped, { type: 'COMMA' }]);
+    else spliceTokens(j, [{ type: 'LPAREN' }, piped, { type: 'RPAREN' }]);
+    return true;
+  }
+  function parsePipeExpr() {
+    let left = parseOrExpr();
+    while (atPipe()) {
+      while (peek().type === 'NEWLINE') take();
+      takeOp(); // |>
+      if (!splicePipedValue(left)) throw new Error("The right of '|>' is a call or a function: 'v |> f(a)' or 'v |> f'");
+      left = parsePrimary();
+    }
+    return left;
   }
 
   // `and`, `or`, `not` on Booleans, loosest of all: `not` below comparison

@@ -988,7 +988,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
     const ref = refFieldInvocationErl(ctx, expr.object, expr.method, typeEnv);
     if (ref && ref.discipline === 'callback') return genRefFieldSend(ctx, expr, typeEnv, sCtx, ref, true);
   }
-  if (isOpreAddressed(expr)) return genErlStaticSend(ctx, expr, typeEnv, sCtx, true, erlArgHelpers(ctx, null, null));
+  if (isOpreAddressed(expr)) return genErlStaticSend(ctx, expr, typeEnv, sCtx, true, erlArgHelpers(ctx, typeEnv, sCtx));
   const objName = expr.object.type === 'RefRead' ? expr.object.name : (expr.object.type === 'Identifier' ? expr.object.name : null);
   // Self-spawned PID: dispatch via direct {bv_dispatch,...} Erlang message.
   if (objName && sCtx?.selfSpawnedRefs?.has(objName)) {
@@ -1068,7 +1068,7 @@ function genDotCallAwait(ctx, expr, typeEnv, sCtx) {
         bv_object_pack(await_response_(${v2.id}))
     end`;
   }
-  const argHelpers = erlArgHelpers(ctx, null, null);
+  const argHelpers = erlArgHelpers(ctx, typeEnv, sCtx);
   const { opExpr, tyExpr } = erlArgSlots(positional, named, method, argHelpers);
   return `begin
         ${v2.seq} = bv_next_seq_(),
@@ -1312,14 +1312,19 @@ function genActorFnCallExpr(ctx, expr, typeEnv, sCtx) {
   if (expr.args.length === 0) {
     return `${selfSendFn}(${erlOp(name)}, #{})`;
   }
+  // An argument that is itself a call to a function of ours passes its reply's one value.
+  const argCode = (a) => {
+    const raw = genExpr(ctx, a, typeEnv, sCtx);
+    return a.type === 'FunctionCallExpr' && /^(\w+_)?self_send\(|^bv_ctx_(direct_)?self_send\(|^outer_self_send\(/.test(raw) ? `bv_object_one(${raw})` : raw;
+  };
   const posArgs = expr.args.filter(a => a.type !== 'NamedArgsBag').map(a => {
     if (a.type === 'Function' && !erlLambdaUsesOuterRefs(ctx, a)) return erlGenLambdaArgLabel(ctx, a, typeEnv, sCtx);
-    return genExpr(ctx, a, typeEnv, sCtx);
+    return argCode(a);
   });
   const namedBag = expr.args.find(a => a.type === 'NamedArgsBag');
   if (namedBag) {
     const namedEntries = Object.entries(namedBag.fields).map(([k, v]) =>
-      `${erlString(k)} => ${genExpr(ctx, v, typeEnv, sCtx)}`,
+      `${erlString(k)} => ${argCode(v)}`,
     );
     if (posArgs.length > 0) {
       return `${selfSendFn}(${erlOp(name)}, [${posArgs.join(', ')}, #{${namedEntries.join(', ')}}])`;

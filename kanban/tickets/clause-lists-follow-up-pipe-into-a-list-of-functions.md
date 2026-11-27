@@ -1,30 +1,20 @@
 ---
 created: 2026-11-25
 ---
-# Clause lists follow-up: pipe into a list of functions
+# `|>`, the pipe
 
-Design: `notes/clause-lists-2026-11-25.md`.
+Design: `notes/pipe-and-clause-lists-settled-2026-11-26.md` (the `|>` section). The first of three pieces split from the clause-lists work; then `clause-lists-callable-lists-with-pattern-heads` and `arrow-functions-take-bare-comma-params`.
 
-Today: a function is a list of functions (the 2026-04-06 overload model: `=` starts the list, `<<` appends, `Function()` is empty).
+Today: there's no pipe. `1 |> inc` fails with "Expected a line break or ';' after a statement, got PIPE": the lexer emits `|` as `PIPE` (src/lexer.js:654) and `>` separately.
 
-Want: a list literal of clauses is that list written as a value.
+Want: `v |> f(a)` is `f(v, a)`.
 
-```brevity
-key |> [
-  "enter" | "esc" -> back
-  "r" -> { board.load!; self }
-  (x == 1) -> do!
-  else -> @walk!(key)
-]
-```
+- Lowest precedence of the binary operators, left-associative: `v |> f |> g(a)` is `g(f(v), a)`; `a + b |> f` is `f(a + b)`.
+- A bare callee takes the value alone: `v |> f` is `f(v)`.
+- Member, remote and writing calls work the same: `v |> svc.lookup(a)`, `v |> add!(a)`.
+- A line may start with `|>`, continuing the previous line.
+- Anything else on the right of `|>` (a literal, an unbound name) fails where it's met.
 
-To settle and then build:
+Watch: `|` already serves type unions, `|params|` delimited functions and the `<T |>` type syntax (`__tests__/classes/subclasses.test.js:109`), which must keep working.
 
-- `|>`, the Elixir pipe (`v |> f(a)` is `f(v, a)`).
-- Calling a List walks it from the head; `List[T](args)` compiles only when `T` is a function type.
-- Clauses: `head -> expr` and `head -> { block }`; `else` as the catch-all, last.
-- Heads: literal patterns (extending overload dispatch to values), `"a" | "b"`, Boolean heads as conditions, computed heads in parens.
-- A Boolean input to a list with a pattern clause is a compile error ("a Boolean is matched with if/else").
-- Arrow params: bare `a, b ->` where nothing to the left owns the comma; `()` required for zero params.
-
-Open in the note: writes in a clause (anonymous functions have no name to carry `!`), whether `Function()` is `[]`, and Elixir-style `when` binding.
+Tests: runtime cases on js, rust and erlang for a call, a bare callee, a chain, a member call, a remote call and a line-leading `|>`; compile-error cases for a non-callable right side.

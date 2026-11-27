@@ -651,6 +651,7 @@ export function tokenize(source) {
       }
       emit({ type: 'SLASH', value: '/' }); i++; continue;
     }
+    if (source[i] === '|' && source[i + 1] === '>') { emit({ type: 'PIPE_FWD', value: '|>' }); i += 2; continue; }
     if (source[i] === '|') { emit({ type: 'PIPE' }); i++; continue; }
 
     if (source[i] === '\r' || source[i] === '﻿') { i++; continue; }

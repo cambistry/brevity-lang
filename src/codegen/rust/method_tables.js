@@ -47,12 +47,12 @@ export const RUST_BLOB_METHODS = {
   'before':      ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(&*${s}, &*${nv})`;
   },
   'after':       ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(&*${s}, &*${nv})`;
   },
   'trim':        ({ s }) => `${s}.trim().to_string()`,
   'trim_start':  ({ s }) => `${s}.trim_start().to_string()`,
@@ -138,12 +138,12 @@ export const RUST_TEXT_METHODS = {
   'before':      ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.find(${s}).map_or(${s}.to_string(), |m| ${s}[..m.start()].to_string())`;
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(&*${s}, &*${nv})`;
   },
   'after':       ({ s, expr, genArg }) => {
     if (expr.args[1].type === 'RegexLiteral') return `${genArg(1)}.find(${s}).map_or(String::new(), |m| ${s}[m.end()..].to_string())`;
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(&*${s}, &*${nv})`;
   },
   'replace':     ({ s, expr, genArg }) => {
     const rep = genArg(2);
@@ -207,11 +207,11 @@ export const RUST_GRAPHEME_METHODS = {
   },
   'before':      ({ s, genArg }) => {
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(_s.to_string(), |i| _s[..i].to_string()))(&*${s}, &*${nv})`;
   },
   'after':       ({ s, genArg }) => {
     const nv = genArg(1);
-    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(${s}, &*${nv})`;
+    return `(|_s: &str, _n: &str| _s.find(_n).map_or(String::new(), |i| _s[i + _n.len()..].to_string()))(&*${s}, &*${nv})`;
   },
   'replace':     ({ s, expr, genArg }) => {
     const rep = genArg(2);
