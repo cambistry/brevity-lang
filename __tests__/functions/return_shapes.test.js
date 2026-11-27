@@ -631,3 +631,38 @@ describe('a tail value after a guard', () => {
     );
   });
 });
+
+// An unannotated bind of a call on an actor takes the reply's sole positional, and
+// fails when the reply has none.
+describe('an unannotated bind of a call on an actor', () => {
+  const script = `
+    B = *{
+      @get = () -> 1
+      @named = () -> v: 1
+    }
+    @positional = {
+      b = B()
+      r = b.get()
+      return :r
+    }
+    @named = {
+      b = B()
+      r = b.named()
+      return :r
+    }
+  `;
+
+  it('takes the sole positional', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'positional', from: 'c' } },
+      { output: { id: '1', re: [{ r: 1 }], ty: [{ r: 'Integer' }], to: 'c' } },
+    );
+  });
+
+  it('fails on a named reply', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'named', from: 'c' } },
+      { output: { id: '1', ex: { named: 'error' }, to: 'c' } },
+    );
+  });
+});
