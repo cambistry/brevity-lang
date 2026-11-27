@@ -3271,3 +3271,54 @@ use :div, :p, :span = HTML
     expect(await made(page)).toEqual(['span', 'div']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// An actor's element projection (`self as div`) binds through an annotation or
+// `as`, naming the class as it's imported: `el div = t`, `el = t as div`.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('binding an element projection', () => {
+  const html = `<html><head>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/builder.bv"></script>
+    </head><body></body></html>`;
+
+  const builderSource = `use document
+use HTML::div
+TextDiv = *(initial Text) {
+  text *Text = initial
+  self as HTML::div = () -> <div>made</div>
+}
+@build. = {
+  body = document.body()
+  first = TextDiv("by annotation")
+  el div = first
+  body.append!(el)
+  second = TextDiv("by as")
+  other = second as div
+  body.append!(other)
+}
+`;
+
+  it('by an annotation and by as', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await actor.sendAsync({ id: '1', op: 'build.' });
+    expect(await page.evaluate(() => [...document.body.querySelectorAll('div')].map(d => d.textContent))).toEqual(['made', 'made']);
+  });
+
+  it('through `::` is an error that names the form', () => {
+    expect(() => compileSource(`
+      use HTML::div
+      TextDiv = *(initial Text) {
+        text *Text = initial
+        self as HTML::div = () -> <div>{ text }</div>
+      }
+      @go = {
+        t = TextDiv("a")
+        el HTML::div = t
+        return 1
+      }
+    `, { remotes: [{ path: 'HTML', service: HTML_MANIFEST }] })).toThrow("'HTML::div' names a class, and '::' is for types — annotate it 'el div'");
+  });
+});

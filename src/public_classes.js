@@ -113,7 +113,7 @@ export function lowerPublicClassCalls(ast, remotesParsed, factoryDecls, dependen
   const aliasOf = new Map(ast.dependencies.filter(d => d.type === 'Dependency' && d.path && !d.destructures).map(d => [d.path, d.name]));
   // `Svc::Point` names a type in Svc's document. A class has no `::` form.
   const checkQualifiedType = (node) => {
-    if (node.type !== 'TypedAssign' || node.typeNameEnc === undefined) return;
+    if (node.type !== 'TypedAssign' || node.typeNameEnc === undefined || !node.typeNameQualified) return;
     for (const a of addressesIn(node.typeNameEnc)) {
       // The file's own (a class's type), the parser resolved.
       if (a.startsWith(':') || !a.includes(':')) continue;

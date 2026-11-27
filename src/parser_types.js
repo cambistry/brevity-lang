@@ -86,6 +86,8 @@ export function encodeAstTypes(ast, remotes = null) {
     if (Array.isArray(node)) { node.forEach(n => visit(n, sc)); return; }
     const at = (k, text) => {
       setEnc(node, k, encode(text, sc));
+      // Written through an alias (`Svc::Point`), which only a type may be.
+      if (k === 'typeName' && text.includes('::')) node.typeNameQualified = true;
       if (!(k === 'typeName' && node.type === 'TypeConstruction')) delete node[k];
     };
     for (const k of TYPE_KEYS) {
