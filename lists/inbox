@@ -9,7 +9,6 @@ kanban/tickets/warn-on-an-unused-value-in-a-body.md
 kanban/tickets/subscription-updates-name-their-sender.md
 kanban/tickets/fix-reactive-interpolation-in-a-self-as-element-clause.md
 kanban/tickets/return-types-in-the-function-header.md
-kanban/tickets/clauses-added-with-on-an-inherited-name.md
 kanban/tickets/synonym-of-actor.md
 kanban/tickets/extend-provides-the-full-relevant-service-description-not.md
 kanban/tickets/opre-op-chains-args1-op1-args2-op2.md
