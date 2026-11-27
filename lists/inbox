@@ -82,7 +82,6 @@ kanban/tickets/how-do-libraries-work-such-as-for-array-map.md
 kanban/tickets/array-type-package.md
 kanban/tickets/map-type-package.md
 kanban/tickets/optimisation-flatten-single-construction-classes-on-rust.md
-kanban/tickets/implement-return-unhandled-bv-equivalent-of-a-guard.md
 kanban/tickets/preamble-tree-shaking.md
 kanban/tickets/catch-label-passing.md
 kanban/tickets/xml-reactivity.md
