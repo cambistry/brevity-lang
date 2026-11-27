@@ -18,5 +18,12 @@ g = (p P) -> p.a()
 
 Expected: on js, rust and erlang, a typed local (and a typed cell) uses the param's check: `p P = R(1)` is a compile error and `p P = Q(1)` compiles. Tests beside the param case.
 
+(I'm not sure how tooled up and/or dependable our system of class instrospection is. Worth reviewing here.)
+
 **Decided (2026-11-26):** the same check for a typed cell and for every write to one (`<-` and
 the like), not only the declaration.
+
+**Scope (2026-11-27):** the check is compile-time and covers typed locals, typed cells and every
+`<-` to one. Running a cell that holds an instance (its writes and calls) belongs to
+`a-cell-of-a-class-is-a-pointer` (`notes/actor-pointers-2026-11-27.md`), so the runtime test here
+covers a typed local only.

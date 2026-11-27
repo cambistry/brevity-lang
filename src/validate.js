@@ -3048,6 +3048,40 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       }
     }
   };
+  // A typed local, a typed cell and every write to a cell take an instance as a
+  // param does: its class or a subclass. A name's value is judged where it's
+  // bound (a guard may have narrowed it), so only other values are judged here.
+  // A cell's type: declared in this body, or the state cell's (`<-` writes only cells).
+  const cellTypes = new Map();
+  const cellType = (name) => (cellTypes.has(name) ? cellTypes.get(name) : typeEnv?.get(name));
+  const checkInstanceFits = (name, declared, value, verb, sigil) => {
+    if (declared === undefined || !value || value.type === 'Identifier' || value.type === 'RefRead') return;
+    const valueType = argTypeOf(value);
+    if (!classOfEnc(valueType, actorByName)) return;
+    if (!canJudgeEnc(declared, actorByName) || !canJudgeEnc(valueType, actorByName)) return;
+    if (acceptsArg(valueType, declared)) return;
+    throw new Error(`Cannot ${verb} '${name} ${sigil}${shown(declared)}' to a value that is ${shown(valueType)}: '${shown(valueType)}' is not assignable to '${shown(declared)}'`);
+  };
+  const walkForInstanceFits = (node) => {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'Function') return; // function literal: validated by recursive validateBody
+    if (node.type === 'TypedAssign') checkInstanceFits(node.name, node.typeNameEnc, node.value, 'bind', '');
+    if (node.type === 'RefDecl' && node.typeNameEnc !== undefined) {
+      cellTypes.set(node.name, node.typeNameEnc);
+      checkInstanceFits(node.name, node.typeNameEnc, node.value, 'bind', '*');
+    }
+    if (node.type === 'SetStatement' || (node.type === 'StateAssign' && node.isRef)) {
+      checkInstanceFits(node.name, cellType(node.name), node.value, node.type === 'SetStatement' ? 'set' : 'bind', '*');
+    }
+    for (const val of Object.values(node)) {
+      if (Array.isArray(val)) {
+        for (const item of val) walkForInstanceFits(item);
+      } else if (val && typeof val === 'object' && val.type) {
+        walkForInstanceFits(val);
+      }
+    }
+  };
+  if (!inferOnly) for (const s of body) walkForInstanceFits(s);
   const formatSig = (params) => {
     const parts = params.map(p => {
       const opt = isOptional(p) ? '? ' : '';

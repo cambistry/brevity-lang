@@ -190,6 +190,82 @@ describe('subclass consumption — assignability (sad path)', () => {
   });
 });
 
+// ── A typed local or cell takes an instance as a param does ─────────────────
+
+describe('subclass consumption — a typed local or cell', () => {
+  const classes = `
+      T = *(x Integer) { @a = () -> v: x as Integer }
+      U = T ^ *(x Integer, y Integer) { super(x); @b = () -> v: y as Integer }
+      W = *(n Integer) { @w = () -> v: n as Integer }
+  `;
+
+  it('a typed local takes a subclass instance', () => {
+    expect(() => compileSource(`${classes}
+      @f = { t T = U(1, 2); return 1 }
+    `)).not.toThrow();
+  });
+
+  it('a typed local refuses an instance of an unrelated class', () => {
+    expect(() => compileSource(`${classes}
+      @f = { t T = W(1); return 1 }
+    `)).toThrow("Cannot bind 't T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+
+  it('a typed local refuses a superclass instance where a subclass is declared', () => {
+    expect(() => compileSource(`${classes}
+      @f = { u U = T(1); return 1 }
+    `)).toThrow("Cannot bind 'u U' to a value that is T: 'T' is not assignable to 'U'");
+  });
+
+  it('a typed local in a nested block is checked', () => {
+    expect(() => compileSource(`${classes}
+      @f = (n Integer) {
+        if (n > 0) { t T = W(1); return 1 }
+        return 2
+      }
+    `)).toThrow("Cannot bind 't T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+
+  it('a typed cell and a write to it take subclass instances', () => {
+    expect(() => compileSource(`${classes}
+      @f = { c *T = U(1, 2); c <- U(3, 4); return 1 }
+    `)).not.toThrow();
+  });
+
+  it('a typed cell refuses an instance of an unrelated class', () => {
+    expect(() => compileSource(`${classes}
+      @f = { c *T = W(1); return 1 }
+    `)).toThrow("Cannot bind 'c *T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+
+  it('a write to a typed cell refuses an instance of an unrelated class', () => {
+    expect(() => compileSource(`${classes}
+      @f = { c *T = U(1, 2); c <- W(1); return 1 }
+    `)).toThrow("Cannot set 'c *T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+
+  it('a state cell refuses an instance of an unrelated class', () => {
+    expect(() => compileSource(`${classes}
+      held *T = W(1)
+      @f = () -> 1
+    `)).toThrow("Cannot bind 'held *T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+
+  it('a write to a state cell takes a subclass instance', () => {
+    expect(() => compileSource(`${classes}
+      held *T = T(1)
+      @f! = { held <- U(1, 2) }
+    `)).not.toThrow();
+  });
+
+  it('a write to a state cell refuses an instance of an unrelated class', () => {
+    expect(() => compileSource(`${classes}
+      held *T = T(1)
+      @f! = { held <- W(1) }
+    `)).toThrow("Cannot set 'held *T' to a value that is W: 'W' is not assignable to 'T'");
+  });
+});
+
 // ── Sad path: constructor shape ──────────────────────────────────────────────
 
 describe('subclass consumption — constructor shape (sad path)', () => {
