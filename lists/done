@@ -1,5 +1,6 @@
 kanban/finished/null-as-list-from-a-remote-passes-on-js.md
 kanban/finished/fix-binding-an-element-projection-gives-a-self-contradicting-error.md
+kanban/finished/rust-arithmetic-on-untyped-operands-defaults-to-0.md
 kanban/finished/js-a-send-inside-a-compound-expression-isn-t-awaited.md
 kanban/finished/overloaded-clauses-that-differ-only-by-class-or-type-params.md
 kanban/finished/a-bare-value-in-a-tail-branch-is-lost.md
