@@ -3219,3 +3219,55 @@ describe('HTML.Element accessors — read attribute through Brevity service', ()
     });
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// An element written as a statement mid-body is built: its `$new` is sent, as a
+// call's would be. Only the last one is the body's value. Each built element
+// passes through document.createElement, which the page records.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('an element statement in a function body', () => {
+  const html = `<html><head>
+    <script>
+      window.made = [];
+      const create = document.createElement.bind(document);
+      document.createElement = (tag, ...rest) => { window.made.push(tag); return create(tag, ...rest); };
+    </script>
+    <script type="module" src="/src/codegen/browser/brevity.js"></script>
+    <script type="text/brevity" src="/builder.bv"></script>
+    </head><body></body></html>`;
+
+  const builderSource = `use document
+use :div, :p, :span = HTML
+@build. = {
+  <p>first</p>
+  body = document.body()
+  body.append!(<div id="out">b</div>)
+}
+@nested. = {
+  make = () {
+    <span>inner</span>
+    <div>last</div>
+  }
+  make()
+}
+`;
+
+  const made = (page) => page.evaluate(() => window.made.splice(0));
+
+  it('in a handler', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await made(page);
+    await actor.sendAsync({ id: '1', op: 'build.' });
+    expect(await made(page)).toEqual(['p', 'div']);
+  });
+
+  it('in a function a handler declares', async () => {
+    const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
+    const actor = await page.connectActor('builder.bv');
+    await made(page);
+    await actor.sendAsync({ id: '1', op: 'nested.' });
+    expect(await made(page)).toEqual(['span', 'div']);
+  });
+});

@@ -6974,10 +6974,11 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const visit = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) { node.forEach(visit); return; }
-      // A self-call mid-body (`@bump(1)`) is a statement: only the last one is a tail.
-      if (node.type === 'FunctionDecl' && Array.isArray(node.body)) {
+      // A call or an element mid-body (`@bump(1)`, `<style>…</style>`) is a statement,
+      // run for its effect: only the last one is a tail.
+      if ((node.type === 'FunctionDecl' || node.type === 'Function') && Array.isArray(node.body)) {
         node.body.forEach((st, i) => {
-          if (i < node.body.length - 1 && st?.type === 'ImplicitReturn' && ['FunctionCallExpr', 'DotCallExpr', 'DotAccessExpr'].includes(st.expr?.type)) {
+          if (i < node.body.length - 1 && st?.type === 'ImplicitReturn' && ['FunctionCallExpr', 'DotCallExpr', 'DotAccessExpr', 'DomConstructor'].includes(st.expr?.type)) {
             node.body[i] = AST.exprStatement(st.expr);
           }
         });
