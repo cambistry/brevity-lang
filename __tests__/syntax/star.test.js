@@ -17,9 +17,8 @@ import { compileSource } from '../helpers.js';
 //   The closing `*` may be followed by `{ body }` (same line or next).
 //   `Cls\n=` may replace `Cls =`; `Cls <<` opens a lineal overload.
 //   Subclass forms:
-//     Sub = Base ^ params ^ *{ body }
-//     Sub = Base ^ *{ expr }      — ingest / declaration return
-//     Sub = *(name Base ^ params) { body }
+//     Sub = Base ^ *(params) { body }
+//     Sub = Base ^ *{ body }
 //   Public `@`:
 //     @Cls = *(params) { body }
 //   Service coercion:
