@@ -22,3 +22,9 @@ Want (in edge cases):
 3. **A next line starting with `-`:** `[a` then `-1]` is two items, never `a - 1`.
 
 Want: commas stay legal on one line; a trailing comma before a break is fine, so pasted code still parses.
+
+**Decided (2026-11-26):**
+
+- **Scope:** every comma list inside `( )` and `[ ]`: call args (positional and named), list literals, tuples and grouped replies, function params, list destructure patterns, type lists. `{ }` is unchanged; a block inside a bracket keeps its statement rules.
+- **Continuation, everywhere:** a line ending in a binary operator, `|>`, `,`, `<-` or an open bracket continues on the next. (A line ending in `=` stays a lineal opener.)
+- **The next line:** a line break ends an item whatever the next line starts with (`(`, `[`, `-`, `.`), except `else`, which continues an inline `if`.

@@ -269,7 +269,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = take().value;
-        take(); // SET (<-) or UPDATE (<|)
+        takeOp(); // SET (<-) or UPDATE (<|)
         const firstExpr = parseExpr();
         if (peek().type === 'COMMA') {
           const args = [{ expr: firstExpr, positional: true }];
@@ -409,6 +409,18 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   // that. `open` is where its items start. Two items with nothing between them,
   // or a comma that follows no item (`(, a)`, `a, , b`), is an error.
   const LIST_SEPARATORS = new Set(['COMMA', 'NEWLINE', 'BLOCK_SEP']);
+  // A line that ends in an operator continues on the next: `a +` then `b`.
+  const takeOp = () => {
+    const tok = take();
+    while (peek().type === 'NEWLINE') take();
+    return tok;
+  };
+  // In a bracket, a line break separates items as a comma does: consume it.
+  const skipListBreaks = () => {
+    if (peek().type !== 'NEWLINE' && peek().type !== 'BLOCK_SEP') return false;
+    while (peek().type === 'NEWLINE' || peek().type === 'BLOCK_SEP') take();
+    return true;
+  };
   const expectListSeparator = (open, what) => {
     if (pos === open || peek().type === 'COMMA' || LIST_SEPARATORS.has(tokens[pos - 1]?.type)) return;
     throw new Error(`Expected ',' between ${what}, got ${peek().type} '${peek().value || ''}'`);
@@ -861,6 +873,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const fields = [];
     const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'fields');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'fields'); consume(); continue; }
       if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
@@ -888,6 +901,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const args = [];
     const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'args');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (peek().type === 'NUMBER') {
@@ -923,6 +937,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const inputs = [];
     const listOpen = pos;
     while (peek().type !== 'RPAREN') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'inputs');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'inputs'); consume(); continue; }
       if (peek().type === 'IDENT') {
@@ -971,6 +986,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       const outputs = [];
       const listOpen = pos;
       while (peek().type !== 'RPAREN') {
+        if (skipListBreaks()) continue;
         expectListSeparator(listOpen, 'outputs');
         if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'outputs'); consume(); continue; }
         if (peek().type === 'IDENT') {
@@ -1255,6 +1271,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     let hasNamed = false;
     const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'args');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (isNamedArgKey()) {
@@ -1279,6 +1296,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const args = [];
     const listOpen = pos;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'args');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'args'); consume(); continue; }
       if (peek().type === 'SIGIL') {
@@ -1388,6 +1406,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const params = [];
     let separated = true;
     while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+      if (skipListBreaks()) { separated = true; continue; }
       if (peek().type === 'COMMA') { expectItemBeforeComma(undefined, 'the list'); consume(); separated = true; continue; }
       if (!separated) {
         throw new Error(`Expected ',' between params, got ${peek().type} '${peek().value || ''}'`);
@@ -1546,7 +1565,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-        take(); // SET (<-) or UPDATE (<|)
+        takeOp(); // SET (<-) or UPDATE (<|)
         const value = parseExpr();
         body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
       } else if (isTypedAssignStart(true)) {
@@ -1613,7 +1632,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-      take(); // SET (<-) or UPDATE (<|)
+      takeOp(); // SET (<-) or UPDATE (<|)
       const value = parseExpr();
       body.push(AST.setStatement(name, value, { updateOp: isUpdate ? '<|' : undefined }));
     } else if (peek().type === 'DOLLAR_IDENT' && tokens[pos + 1]?.type === 'EQUALS') {
@@ -1699,7 +1718,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           if (isReadonlyParam(name)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
           throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${name}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
         }
-        take(); // SET (<-) or UPDATE (<|)
+        takeOp(); // SET (<-) or UPDATE (<|)
         // Check if first arg is named (key: value)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];
@@ -2441,7 +2460,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const isProtected = take().type === 'DCOLON';
     const fieldName = take().value;
     const isUpdate = peek().type === 'UPDATE';
-    take(); // SET (<-) or UPDATE (<|)
+    takeOp(); // SET (<-) or UPDATE (<|)
     const value = parseExpr();
     const set = AST.actorFieldSet(objName, fieldName, value, { updateOp: isUpdate ? '<|' : undefined });
     if (isProtected) set.protected = true;
@@ -2712,6 +2731,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         const elements = [];
         const listOpen = pos;
         while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
+          if (skipListBreaks()) continue;
           expectListSeparator(listOpen, 'list elements');
           if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
           elements.push(parseExpr());
@@ -2943,7 +2963,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     }
     let base = parsePrimary();
     if (peek().type === 'POWER') {
-      take();
+      takeOp();
       return AST.binaryExpr('**', base, parseExpExpr());
     }
     return base;
@@ -2952,7 +2972,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   function parseMulExpr() {
     let left = parseExpExpr();
     while (['STAR', 'SLASH', 'PERCENT'].includes(peek().type)) {
-      const op = take().value;
+      const op = takeOp().value;
       left = AST.binaryExpr(op, left, parseExpExpr());
     }
     return left;
@@ -2961,7 +2981,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   function parseAddExpr() {
     let left = parseMulExpr();
     while (['PLUS', 'MINUS'].includes(peek().type)) {
-      const op = take().value;
+      const op = takeOp().value;
       left = AST.binaryExpr(op, left, parseMulExpr());
     }
     return left;
@@ -2981,7 +3001,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         if (isReadonlyParam(name)) throw new Error(`Cannot set '${name}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
         throw new Error(`Cannot set '${name}' — only '*Type' variables support '<-'`);
       }
-      const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
+      const updateOp = takeOp().type === 'UPDATE' ? '<|' : undefined;
       return { type: 'SetExpr', name, value: parseExpr(), updateOp };
     }
     const value = parseOrExpr();
@@ -2989,7 +3009,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     if (!inWriteRhs) throw new Error("The left side of '<-' must be a cell");
     const rest = [];
     while (atWriteOp()) {
-      const updateOp = take().type === 'UPDATE' ? '<|' : undefined;
+      const updateOp = takeOp().type === 'UPDATE' ? '<|' : undefined;
       rest.push({ value: parseOrExpr(), updateOp });
     }
     return { type: 'SetChain', first: value, rest };
@@ -3007,7 +3027,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   function parseOrExpr() {
     let left = parseAndExpr();
     while (atKw('or')) {
-      take(); // or
+      takeOp(); // or
       const right = parseAndExpr();
       left = boolIf('or', left, AST.boolLiteral(true), right);
     }
@@ -3016,7 +3036,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   function parseAndExpr() {
     let left = parseNotExpr();
     while (atKw('and')) {
-      take(); // and
+      takeOp(); // and
       const right = parseNotExpr();
       left = boolIf('and', left, right, AST.boolLiteral(false));
     }
@@ -3040,13 +3060,13 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       return AST.binaryExpr('>>', left, parseValueExpr());
     }
     if (CMP_OPS.has(peek().type)) {
-      const tok = take();
+      const tok = takeOp();
       left = AST.binaryExpr(CMP_OPS.get(tok.type), left, parseAddExpr());
     }
     // Slice 11 of types-implementation-plan-2026-04-27: `??` fallback.
     // Right-associative — `a ?? b ?? c` is `a ?? (b ?? c)`.
     if (peek().type === 'NULL_COALESCE') {
-      take();
+      takeOp();
       left = AST.binaryExpr('??', left, parseValueExpr());
     }
     return left;
@@ -3288,6 +3308,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     const pattern = [];
     const listOpen = pos;
     while (peek().type !== 'RBRACKET' && peek().type !== 'EOF') {
+      if (skipListBreaks()) continue;
       expectListSeparator(listOpen, 'list elements');
       if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'list elements'); consume(); continue; }
       if (peek().type === 'ELLIPSIS') {
@@ -3913,7 +3934,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       } else if (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'SET' || tokens[pos + 1]?.type === 'UPDATE')) {
         const isUpdate = tokens[pos + 1]?.type === 'UPDATE';
         const name = take().value;
-        take(); // SET (<-) or UPDATE (<|)
+        takeOp(); // SET (<-) or UPDATE (<|)
         if (peek().type === 'IDENT' && tokens[pos + 1]?.type === 'COLON') {
           const args = [];
           const key = take().value; take();
@@ -4082,7 +4103,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
                 if (isReadonlyParam(pName)) throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — '&Type' parameters are read-only; declare as '*Type' for write capability`);
                 throw new Error(`Cannot ${isUpdate ? 'update' : 'set'} '${pName}' — only '*Type' variables support '${isUpdate ? '<|' : '<-'}'`);
               }
-              take(); // SET (<-) or UPDATE (<|)
+              takeOp(); // SET (<-) or UPDATE (<|)
               ifBody.push(AST.setStatement(pName, parseExpr(), { updateOp: isUpdate ? '<|' : undefined }));
             } else {
               break;
@@ -4559,6 +4580,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       const params = [];
       const listOpen = pos;
       while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+        if (skipListBreaks()) continue;
         expectListSeparator(listOpen, 'params');
         if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'params'); consume(); continue; }
           const pName = expect('IDENT').value;
@@ -4583,6 +4605,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         returns = [];
         const listOpen = pos;
         while (peek().type !== 'RPAREN' && peek().type !== 'EOF') {
+          if (skipListBreaks()) continue;
           expectListSeparator(listOpen, 'returns');
           if (peek().type === 'COMMA') { expectItemBeforeComma(listOpen, 'returns'); consume(); continue; }
           const rName = expect('IDENT').value;
