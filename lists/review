@@ -1,2 +1,3 @@
 kanban/finished/test-get-introspects-non-scalar-types.md
 kanban/finished/a-cell-of-a-class-is-a-pointer.md
+kanban/finished/lambda-params-take-their-types-from-the-slot.md
