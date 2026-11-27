@@ -371,9 +371,16 @@ function _bv_div(a, b) {
   if (a instanceof BvDecimal || b instanceof BvDecimal) return _bv_dec_op(a, '/', b);
   return BigInt(a) / BigInt(b);
 }
+const _BV_ARITH = new Set(['+', '-', '*', '/', '%', '**']);
+const _bvIsNum = (v) => typeof v === 'bigint' || typeof v === 'number' || v instanceof BvDecimal;
 function _bv_num_op(a, op, b) {
   // An operand typed Anything (an untyped param of a generic function) only
   // reveals its numeric kind at runtime: same promotion rule as _bv_div.
+  // Arithmetic is on numbers (two Texts under + join); any other operand fails.
+  if (_BV_ARITH.has(op)) {
+    if (op === '+' && typeof a === 'string' && typeof b === 'string') return a + b;
+    if (!_bvIsNum(a) || !_bvIsNum(b)) throw new Error("arithmetic '" + op + "' on a non-number: " + _bvAsKind(a) + ' and ' + _bvAsKind(b));
+  }
   if (typeof a === 'number' || typeof b === 'number') return _bv_float_op(a, op, b);
   if (a instanceof BvDecimal || b instanceof BvDecimal) return _bv_dec_op(a, op, b);
   return _bv_int_op(a, op, b);

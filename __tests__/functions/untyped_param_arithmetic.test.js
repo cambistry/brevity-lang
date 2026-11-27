@@ -59,3 +59,50 @@ describe('untyped param arithmetic in a file-level function', () => {
     );
   });
 });
+
+// Arithmetic on operands no type says are numbers is on numbers, checked when it
+// runs: two Texts under `+` join, and any other operand fails. No operand reads as
+// 0, and a Float isn't truncated.
+describe('arithmetic on Anything operands', () => {
+  const script = `
+    @add = (a Anything, b Anything) {
+      r Integer = (a + b) as Integer
+      return r
+    }
+    @addF = (a Anything, b Anything) {
+      r Float = (a + b) as Float
+      return r
+    }
+    @join = (a Anything, b Anything) {
+      r Text = (a + b) as Text
+      return r
+    }
+  `;
+
+  it('of numbers', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2, 3], 'add'], ty: [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', re: [5], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[1.5, 2], 'addF'], ty: [['Float', 'Integer']], from: 'c' } },
+      { output: { id: '2', re: [3.5], ty: ['Float'], to: 'c' } },
+    );
+  });
+
+  it('of two Texts joins them', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [['a', 'b'], 'join'], ty: [['Text', 'Text']], from: 'c' } },
+      { output: { id: '1', re: ['ab'], ty: ['Text'], to: 'c' } },
+    );
+  });
+
+  it('with a Text, a Boolean or a null operand fails', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [['t', 1], 'add'], ty: [['Text', 'Integer']], from: 'c' } },
+      { output: { id: '1', ex: { add: 'error' }, to: 'c' } },
+      { input: { id: '2', op: [[true, 1], 'add'], ty: [['Boolean', 'Integer']], from: 'c' } },
+      { output: { id: '2', ex: { add: 'error' }, to: 'c' } },
+      { input: { id: '3', op: [[null, 1], 'add'], ty: [['null', 'Integer']], from: 'c' } },
+      { output: { id: '3', ex: { add: 'error' }, to: 'c' } },
+    );
+  });
+});

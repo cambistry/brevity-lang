@@ -1261,9 +1261,12 @@ ${subRegLines.join('\n')}
     const isCall = expr.expr.type === 'FunctionCallExpr' || expr.expr.type === 'DotCallExpr' || expr.expr.type === 'DotAccessExpr';
     // Arithmetic on untyped operands comes out as a native i64, not a BigInt.
     const native = expr.expr.type === 'BinaryExpr' && inner.includes('.as_i64()');
+    // Untyped arithmetic (bv_dyn_arith) is already a Value.
+    const dynamic = expr.expr.type === 'BinaryExpr' && inner.startsWith('bv_dyn_arith(');
     // A call on the actor's own function already comes out as its sole value.
     const value = isCall ? (inner.endsWith('.one()') ? inner : `BvObject::pack(&${inner}).one()`)
       : native ? `json!(${inner})`
+      : dynamic ? inner
       : toJsonValue(inner, inferType(expr.expr, typeEnv) ?? (expr.expr.type === 'BinaryExpr' ? expr.typeNameEnc : undefined));
     const out = convertFromValue(`bv_as(&${value}, &json!(${JSON.stringify(expr.desc)}), ${JSON.stringify(typeText(expr.typeNameEnc, G.ctx.depAliases))})`, expr.typeNameEnc);
     G.strictConvert = strict;

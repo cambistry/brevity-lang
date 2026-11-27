@@ -2256,6 +2256,10 @@ fn bv_dyn_arith(a: &Value, op: &str, b: &Value) -> Value {
     if let (Some(sa), Some(sb)) = (a.as_str(), b.as_str()) {
         if op == "+" { return Value::String(format!("{}{}", sa, sb)); }
     }
+    // Arithmetic is on numbers: any other operand fails, never reads as 0.
+    if !a.is_number() || !b.is_number() {
+        panic!("arithmetic '{}' on a non-number: {} and {}", op, bv_as_kind(a), bv_as_kind(b));
+    }
     let is_int = |v: &Value| v.is_number() && !v.to_string().contains(|c| c == '.' || c == 'e' || c == 'E');
     if is_int(a) && is_int(b) {
         let (x, y) = (bv_to_bigint(a), bv_to_bigint(b));

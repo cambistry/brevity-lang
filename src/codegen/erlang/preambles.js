@@ -272,7 +272,9 @@ bv_div(A, {bv_decimal, _, _} = B) -> bv_dec_op(A, '/', B);
 bv_div(A, B) when is_integer(A), is_integer(B) -> A div B.
 
 %% Generic arithmetic/comparison — an operand typed Anything (an untyped param
-%% of a generic function) only reveals its numeric kind at runtime.
+%% of a generic function) only reveals its numeric kind at runtime. Two Texts
+%% under + join; arithmetic on any other non-number fails (badarith).
+bv_num_op(A, '+', B) when is_binary(A), is_binary(B) -> <<A/binary, B/binary>>;
 bv_num_op({bv_decimal, _, _} = A, Op, B) -> bv_dec_op(A, Op, B);
 bv_num_op(A, Op, {bv_decimal, _, _} = B) -> bv_dec_op(A, Op, B);
 bv_num_op(A, '/', B) -> bv_div(A, B);

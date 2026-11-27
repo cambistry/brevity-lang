@@ -695,6 +695,9 @@ export function genExpr(ctx, expr) {
     if (isDecOp) return `_bv_dec_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp && (lType === 'Anything' || rType === 'Anything')) return `_bv_num_op(${left}, '${expr.op}', ${right})`;
     if (isIntOp) return `_bv_int_op(${left}, '${expr.op}', ${right})`;
+    // Arithmetic on operands whose types aren't known here: numbers, checked at runtime.
+    const untyped = (t) => t === undefined || t === 'Anything';
+    if (['+', '-', '*', '/', '%', '**'].includes(expr.op) && untyped(lType) && untyped(rType)) return `_bv_num_op(${left}, '${expr.op}', ${right})`;
     if (expr.op === '/') return `_bv_div(${left}, ${right})`;
     // List + List → concat (pure, returns new list).
     if (expr.op === '+' && leadsWithList(lType) && leadsWithList(rType)) {
