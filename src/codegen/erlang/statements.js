@@ -30,6 +30,7 @@ import {
   erlOuterCtx,
   erlSendVars,
   erlSetTarget,
+  erlActorSet,
   genExpr,
   genDotCallAwait,
   genChildDotCallAwait,
@@ -698,18 +699,10 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       }
     }
 
+    // A cell holding an actor stores the new one; its `set` is an ActorSetStatement
+    // (src/validate.js lowerPointerWrites).
     if (s.type === 'SetStatement') {
-      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
-        const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
-        lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${val}], _Id, _From),`);
-      } else if (sCtx.selfSpawnedRefs?.has(s.name)) {
-        // Instance process: send the set and await its (silent) completion.
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, stmtCtx);
-        lines.push(`${I}bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, stmtCtx)}]),`);
-      } else {
+      {
         const val = genExpr(ctx, s.value, typeEnv, stmtCtx);
         lines.push(`${I}put(${erlSetTarget(ctx, s.name)}, ${val}),`);
         // In-process subscribers: cell_subs entries tagged {inproc, Pid,
@@ -775,28 +768,7 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
     }
 
     if (s.type === 'ActorSetStatement') {
-      if ((sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) || sCtx.selfSpawnedRefs?.has(s.name)) {
-        const actorName = sCtx.childActorRefs?.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const posArgs = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr, typeEnv, stmtCtx));
-        const namedArgs = s.args.filter(a => !a.positional);
-        let payload;
-        if (namedArgs.length > 0) {
-          const namedMap = namedArgs.map(a => `${erlString(a.name)} => ${genExpr(ctx, a.expr, typeEnv, stmtCtx)}`).join(', ');
-          if (posArgs.length > 0) {
-            payload = `[${posArgs.join(', ')}, #{${namedMap}}]`;
-          } else {
-            payload = `#{${namedMap}}`;
-          }
-        } else {
-          payload = `[${posArgs.join(', ')}]`;
-        }
-        if (actorName) {
-          lines.push(`${I}child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From),`);
-        } else {
-          lines.push(`${I}bv_inst_call_(${genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, stmtCtx)}, <<"${wireOp}">>, ${payload}),`);
-        }
-      }
+      lines.push(`${I}${erlActorSet(ctx, s, stmtCtx, typeEnv, (e) => genExpr(ctx, e, typeEnv, stmtCtx))},`);
     }
 
     if (s.type === 'ActorFieldSet') {
@@ -895,6 +867,8 @@ function buildErlWhileGuardCase(ctx, ifExpr, typeEnv, sCtx, makeThrow) {
         bindLocalType(env, s);
       } else if (s.type === 'SetStatement') {
         exprs.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
+      } else if (s.type === 'ActorSetStatement') {
+        exprs.push(erlActorSet(ctx, s, scope, env, (e) => genExpr(ctx, e, env, scope)));
       } else if (s.type === 'StateAssign') {
         exprs.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
       } else if (s.type === 'ExprStatement') {
@@ -1007,6 +981,9 @@ function genErlCatchBodyExpr(ctx, s, typeEnv, sCtx, indent, opts = {}) {
   if (s.type === 'BareTypeDecl') return '';
   if (s.type === 'SetStatement') {
     return `${indent}put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`;
+  }
+  if (s.type === 'ActorSetStatement') {
+    return `${indent}${erlActorSet(ctx, s, sCtx, typeEnv, (e) => genExpr(ctx, e, typeEnv, sCtx))}`;
   }
   if (s.type === 'StateAssign') {
     return `${indent}put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`;
@@ -1133,6 +1110,8 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
     }
     if (s.type === 'SetStatement') {
       bodyLines.push(`${I}            put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
+    } else if (s.type === 'ActorSetStatement') {
+      bodyLines.push(`${I}            ${erlActorSet(ctx, s, scope, env, (e) => genExpr(ctx, e, env, scope))}`);
     } else if (s.type === 'StateAssign') {
       bodyLines.push(`${I}            put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, env, scope)})`);
     } else if (s.type === 'TypedAssign' || s.type === 'Assign') {

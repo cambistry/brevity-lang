@@ -725,7 +725,9 @@ function handleTypedAssign_FunctionCallExpr(s, typeEnv, fnDefs, I, lines) {
           const bsVal = genRustExpr(bs.value, typeEnv);
           const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
           const bk = G.ctx.stateVarNames.has(bs.name) ? stateKey(bs.name) : bs.name;
-          blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bk}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+          blockLines.push(`${I}    ${storeInsert(rsStore(bs.name), bk, forceJsonWrap(toJsonValue(bsVal, t)))}`);
+        } else if (bs.type === 'ActorSetStatement') {
+          blockLines.push(`${I}    ${genRustActorSet(bs, typeEnv, sCtx)}`);
         } else if (bs.type === 'ExprStatement') {
           if (bs.expr.type === 'IfExpr') {
             blockLines.push(genRustIfStatement(bs.expr, typeEnv, `${I}    `));
@@ -867,6 +869,8 @@ function isStateChildCall(expr) {
   const o = expr.object;
   if (o.type !== 'Identifier' && o.type !== 'RefRead') return false;
   if (G.ctx.childVarToActor?.has(o.name)) return true;
+  // A local pointer: the address of an instance (src/validate.js lowerPointerWrites).
+  if (!o.outer && !G.ctx.stateVarNames?.has(o.name) && G.ctx.pointerLocals?.has(o.name)) return true;
   // A cell typed with a class of this file, its own or one of an actor it's
   // declared in: genRustExpr dispatches to that actor's per-instance handler
   // and yields the reply Value.
@@ -1258,7 +1262,9 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
               const bk = G.ctx.stateVarNames.has(bs.name) ? stateKey(bs.name) : bs.name;
-              blockLines.push(`${I}    ${rsStore(bs.name)}.insert("${bk}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+              blockLines.push(`${I}    ${storeInsert(rsStore(bs.name), bk, forceJsonWrap(toJsonValue(bsVal, t)))}`);
+            } else if (bs.type === 'ActorSetStatement') {
+              blockLines.push(`${I}    ${genRustActorSet(bs, typeEnv, sCtx)}`);
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
               const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
@@ -1410,6 +1416,21 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             } else {
               lines.push(`${I}let ${mintRustSsa(item.name)} = ${accessor};`);
             }
+          }
+          return;
+        }
+        // A local pointer: the instance it holds answers (src/validate.js lowerPointerWrites).
+        if (dotName && !G.ctx.stateVarNames?.has(dotName) && G.ctx.pointerLocals?.has(dotName)) {
+          const tempName = `_dc${G.ctx.fnTempCounter++}`;
+          lines.push(`${I}let ${tempName}_s = { let _r = ${genRustExpr(expr, typeEnv)}; BvObject::pack(&_r) };`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const key = item.key !== undefined ? item.key : item.named ? item.name : null;
+            const accessor = key !== null
+              ? `${tempName}_s.named.get(${JSON.stringify(key)}).cloned().unwrap_or(Value::Null)`
+              : `${tempName}_s.positional.get(${item.idx || 0}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx || 0}))`;
+            if (item.typeEnc !== undefined) lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
+            else lines.push(`${I}let ${mintRustSsa(item.name)} = ${accessor};`);
           }
           return;
         }
@@ -1900,6 +1921,31 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
 // themselves.
 // A store whose value calls back into the actor would borrow `self` twice, so the
 // value is computed first.
+// `a <- v` where `a` names an actor: `$set` (or `$update`) to it, its `set`
+// (src/validate.js lowerPointerWrites), as one statement. The actor is a flat
+// child, an instance this body spawned, or the instance a pointer holds.
+function genRustActorSet(s, typeEnv, sCtx) {
+  const isFlatChild = sCtx?.childActorRefs?.has(s.name);
+  const isInstance = sCtx?.selfSpawnedRefs?.has(s.name) && sCtx.selfSpawnedRefs.get(s.name) !== '__self__';
+  if (!isFlatChild && !isInstance && !s.className) throw new Error(`Cannot set '${s.name}': it doesn't name an actor`);
+  const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+  const held = () => genRustExpr({ type: G.ctx.refNames?.has(s.name) || G.ctx.stateVarNames.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv);
+  const dispatch = (payload) => isFlatChild
+    ? `self.child_${sCtx.childActorRefs.get(s.name).toLowerCase()}_dispatch("${wireOp}", ${payload}, "", "__parent")`
+    : isInstance
+      ? `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(s.name).toLowerCase(), rustSsaResolve(s.name))}"${wireOp}", ${payload}, "", "__parent")`
+      : `{ let _held: Value = ${held()}.clone(); let _p: Value = ${payload.replace(/^&/, '')}; self.child_dispatch_ref("${s.className.toLowerCase()}", &_held, "${wireOp}", &_p, "", "__parent") }`;
+  const arg = (e) => toJsonValue(genRustExpr(e, typeEnv), orAny(inferLiteralType(e) ?? inferType(e, typeEnv)));
+  const posArgExprs = s.args.filter(a => a.positional).map(a => arg(a.expr));
+  const namedArgs = s.args.filter(a => !a.positional);
+  if (namedArgs.length === 0) return `${dispatch(`&${valueArray(posArgExprs)}`)};`;
+  const namedInserts = namedArgs.map(a => `_nm.insert("${a.name}".to_string(), ${arg(a.expr)});`).join(' ');
+  if (posArgExprs.length > 0) {
+    return `{ let mut _arr: Vec<Value> = vec![${posArgExprs.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); ${dispatch('&Value::Array(_arr)')}; }`;
+  }
+  return `{ let mut _nm = Map::new(); ${namedInserts} ${dispatch('&Value::Object(_nm)')}; }`;
+}
+
 function storeInsert(store, key, value) {
   if (/self\.(self_send|child_|handle_op)/.test(value)) {
     return `{ let _sv = ${value}; ${store}.insert("${key}".to_string(), _sv); }`;
@@ -2204,7 +2250,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
     } else if (s.type === 'WhileStatement') {
       lines.push(genRustWhileStatement(s, typeEnv, I, makeRetExpr));
     } else if (s.type === 'RefDecl') {
-      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
+      if (s.pointer) {
+        // A pointer: the cell holds the address of an instance (src/validate.js
+        // lowerPointerWrites). The value is built first: building needs `self`.
+        (G.ctx.pointerLocals ??= new Map()).set(s.name, s.pointer);
+        const pv = `_pv_${G.ctx.fnTempCounter++}`;
+        lines.push(`${I}let ${pv}: Value = ${genRustExpr(s.value, typeEnv)};`);
+        lines.push(`${I}${storeInsert(rsStore(s.name), s.name, pv)}`);
+      } else if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo.has(s.value.callee.name)) {
         // Child actor ref — track mapping, call init if needed
         sCtx.childActorRefs.set(s.name, s.value.callee.name);
         const actorName = s.value.callee.name;
@@ -2219,18 +2272,14 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         const k = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
         lines.push(`${I}${storeInsert(rsStore(s.name), k, forceJsonWrap(toJsonValue(val, t)))}`);
       }
+    } else if (s.type === 'SetStatement' && s.pointer) {
+      // Repointing: store the new address. The value is built first: building needs `self`.
+      const pv = `_pv_${G.ctx.fnTempCounter++}`;
+      lines.push(`${I}let ${pv}: Value = ${genRustExpr(s.value, typeEnv)};`);
+      const kk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
+      lines.push(`${I}${storeInsert(rsStore(s.name), kk, pv)}`);
     } else if (s.type === 'SetStatement') {
-      if (sCtx.childActorRefs && sCtx.childActorRefs.has(s.name)) {
-        const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
-      } else if (sCtx.selfSpawnedRefs?.has(s.name) && sCtx.selfSpawnedRefs.get(s.name) !== '__self__') {
-        const lc = sCtx.selfSpawnedRefs.get(s.name).toLowerCase();
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const val = genRustExpr(s.value, typeEnv);
-        lines.push(`${I}self.${instDispatchAt(lc, rustSsaResolve(s.name))}"${wireOp}", &${valueArray([val])}, "", "__parent");`);
-      } else if (!G.ctx.stateVarNames.has(s.name) && !G.ctx.refNames?.has(s.name)) {
+      if (!G.ctx.stateVarNames.has(s.name) && !G.ctx.refNames?.has(s.name)) {
         throw new Error(`Cannot set '${s.name}' — only 'ref' variables and actor references support '<-'`);
       } else if (s.value?.type === 'Function') {
         // Lambda assignment to state/ref var — register handler, store label
@@ -2364,34 +2413,7 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
         }
       }
     } else if (s.type === 'ActorSetStatement') {
-      const isFlatChild = sCtx.childActorRefs && sCtx.childActorRefs.has(s.name);
-      const isInstance = sCtx.selfSpawnedRefs?.has(s.name) && sCtx.selfSpawnedRefs.get(s.name) !== '__self__';
-      if (isFlatChild || isInstance) {
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const dispatch = (payload) => isFlatChild
-          ? `self.child_${sCtx.childActorRefs.get(s.name).toLowerCase()}_dispatch("${wireOp}", ${payload}, "", "__parent")`
-          : `self.${instDispatchAt(sCtx.selfSpawnedRefs.get(s.name).toLowerCase(), rustSsaResolve(s.name))}"${wireOp}", ${payload}, "", "__parent")`;
-        const posArgExprs = s.args.filter(a => a.positional).map(a => {
-          const raw = genRustExpr(a.expr, typeEnv);
-          const t = (inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv));
-          return toJsonValue(raw, orAny(t));
-        });
-        const namedArgs = s.args.filter(a => !a.positional);
-        if (namedArgs.length > 0) {
-          const namedInserts = namedArgs.map(a => {
-            const raw = genRustExpr(a.expr, typeEnv);
-            const t = (inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv));
-            return `_nm.insert("${a.name}".to_string(), ${toJsonValue(raw, orAny(t))});`;
-          }).join(' ');
-          if (posArgExprs.length > 0) {
-            lines.push(`${I}{ let mut _arr: Vec<Value> = vec![${posArgExprs.join(', ')}]; let mut _nm = Map::new(); ${namedInserts} _arr.push(Value::Object(_nm)); ${dispatch('&Value::Array(_arr)')}; }`);
-          } else {
-            lines.push(`${I}{ let mut _nm = Map::new(); ${namedInserts} ${dispatch('&Value::Object(_nm)')}; }`);
-          }
-        } else {
-          lines.push(`${I}${dispatch(`&${valueArray(posArgExprs)}`)};`);
-        }
-      }
+      lines.push(`${I}${genRustActorSet(s, typeEnv, sCtx)}`);
     } else if (s.type === 'ActorFieldSet') {
       // c.field <- v — dispatch the synthesized setter. In process the arm key
       // is the pair "$set field"; on the wire the op is "$set", the field the
@@ -2848,20 +2870,16 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
             return copy;
           }
           for (const bs of fnBodyStmts) {
-            if (bs.type === 'SetStatement') {
-              if (sCtx.childActorRefs && sCtx.childActorRefs.has(bs.name)) {
-                const actorName = sCtx.childActorRefs.get(bs.name);
-                const wireOp = bs.updateOp === '<|' ? '$update' : '$set';
-                const rewritten = rewriteRefReads(bs.value);
-                const bsVal = genRustExpr(rewritten, typeEnv);
-                blockLines.push(`${I}self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([bsVal])}, "", "__parent");`);
-              } else {
+            if (bs.type === 'ActorSetStatement') {
+              blockLines.push(`${I}${genRustActorSet({ ...bs, args: bs.args.map(a => ({ ...a, expr: rewriteRefReads(a.expr) })) }, typeEnv, sCtx)}`);
+            } else if (bs.type === 'SetStatement') {
+              {
                 const refName = refParamMap.get(bs.name) || bs.name;
                 const rewritten = rewriteRefReads(bs.value);
                 const bsVal = genRustExpr(rewritten, typeEnv);
                 const t = typeEnv.get(refName) || typeEnv.get(bs.name) || inferLiteralType(bs.value);
                 const ek = G.ctx.stateVarNames.has(refName) ? stateKey(refName) : refName;
-                blockLines.push(`${I}${rsStore(refName)}.insert("${ek}".to_string(), ${forceJsonWrap(toJsonValue(bsVal, t))});`);
+                blockLines.push(`${I}${storeInsert(rsStore(refName), ek, forceJsonWrap(toJsonValue(bsVal, t)))}`);
               }
             } else if (bs.type === 'StateAssign') {
               const bsVal = genRustExpr(bs.value, typeEnv);
@@ -3074,6 +3092,7 @@ export function genRustCatchBodyStmt(s, typeEnv, I) {
     const sk = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;
     return `${I}${storeInsert(rsStore(s.name), sk, forceJsonWrap(toJsonValue(val, t)))}`;
   }
+  if (s.type === 'ActorSetStatement') return `${I}${genRustActorSet(s, typeEnv, G.ctx.enclosingLocals)}`;
   if (s.type === 'Assign') {
     const val = genRustExpr(s.value, typeEnv);
     return `${I}let ${rustIdent(s.name)} = ${val};`;
@@ -3247,11 +3266,8 @@ function genRustIfStatementBody(branch, typeEnv, I) {
   const lines = [];
   const stmts = branch.body || (branch.expr ? [{ type: 'ExprStatement', expr: branch.expr }] : []);
   for (const s of stmts) {
-    const childActor = s.type === 'SetStatement' && G.ctx.enclosingLocals?.childActorRefs?.get(s.name);
-    if (childActor) {
-      // A ref holding a child actor: the write is its `$set`.
-      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-      lines.push(`${I}self.child_${childActor.toLowerCase()}_dispatch("${wireOp}", &${valueArray([genRustExpr(s.value, typeEnv)])}, "", "__parent");`);
+    if (s.type === 'ActorSetStatement') {
+      lines.push(`${I}${genRustActorSet(s, typeEnv, G.ctx.enclosingLocals)}`);
     } else if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);

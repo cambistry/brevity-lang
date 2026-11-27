@@ -146,6 +146,142 @@ function lowerCellMemberReads(ast) {
   walk(ast.actors);
 }
 
+// A cell holding an actor of a class here is a pointer (notes/actor-pointers-2026-11-27.md).
+// Its bare name is the actor, and `*name` the cell:
+// - `*p <- v` repoints it: a SetStatement marked `cell`, which stores.
+// - `p <- v` is the actor's `set`: an ActorSetStatement, sent as `$set`. It's an error
+//   when the class (or an ancestor) has no `set` (`update` for `<|`).
+// - `sub *p, fn` subscribes to the cell; `sub p, …` is an error.
+// A cell's own setter (`set@p`, `set.p`) stores. On a value cell, `*n <- v` is an error.
+function lowerPointerWrites(ast) {
+  const byName = new Map((ast.actors || []).filter(a => a.name).map(a => [a.name, a]));
+  const classOf = (t) => {
+    if (t === undefined) return null;
+    for (const m of encMembers(t)) {
+      if (!isInstance(m)) continue;
+      const names = ownNames(m);
+      if (names?.length === 1 && byName.has(names[0])) return byName.get(names[0]);
+    }
+    return null;
+  };
+  const answers = (cls, op) => {
+    const seen = new Set();
+    const stack = [cls];
+    while (stack.length) {
+      const c = stack.pop();
+      if (!c || seen.has(c)) continue;
+      seen.add(c);
+      if ((c.functions || []).some(f => f.name === op || f.name === '@' + op)) return true;
+      for (const st of c.supertypes || []) stack.push(byName.get(st.supertype));
+    }
+    return false;
+  };
+  const visit = (body, outer, outerTypes) => {
+    if (!Array.isArray(body)) return;
+    const pointers = new Map(outer);
+    const nullableTypes = new Map(outerTypes);
+    // A name bound to an actor (`b = Box(0)`, `b Box = …`): `b <- v` is its `set` too.
+    const actors = new Map();
+    const collect = (n) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach(collect); return; }
+      if (n.type === 'Assign' || n.type === 'TypedAssign') {
+        const built = n.value?.type === 'FunctionCallExpr' && !n.value.callee?.cellType ? byName.get(n.value.callee?.name) : null;
+        const cls = classOf(n.typeNameEnc) ?? (n.typeNameEnc === undefined ? built : null);
+        if (cls) actors.set(n.name, cls);
+      }
+      if (n.type === 'RefDecl' && classOf(n.typeNameEnc)) { pointers.set(n.name, classOf(n.typeNameEnc)); nullableTypes.set(n.name, n.typeNameEnc); n.pointer = classOf(n.typeNameEnc).name; }
+      // `b = *Box(0)`: a pointer to a new Box.
+      if (n.type === 'RefDecl' && n.typeNameEnc === undefined && n.value?.type === 'FunctionCallExpr'
+        && n.value.callee?.cellType && byName.has(n.value.callee.name)) { pointers.set(n.name, byName.get(n.value.callee.name)); n.pointer = n.value.callee.name; }
+      if (n.type === 'Function') for (const p of n.params || []) if (p.ref && classOf(p.typeEnc)) { pointers.set(p.name, classOf(p.typeEnc)); nullableTypes.set(p.name, p.typeEnc); }
+      for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') collect(n[k]);
+    };
+    collect(body);
+    const lower = (s) => {
+      if (s?.type === 'SetStatement') {
+        const cls = pointers.get(s.name) ?? actors.get(s.name);
+        if (s.setter) { if (cls) { s.cell = true; s.pointer = cls.name; } return s; }
+        if (s.cell && !pointers.has(s.name) && actors.has(s.name)) throw new Error(`'${s.name}' names a ${cls.name}, not a cell, so it can't be repointed: '*${s.name} <- …' needs '${s.name} *${cls.name}'`);
+        if (s.cell && !cls) throw new Error(`'${s.name}' holds a value, not an actor, so it's written '${s.name} <- …', not '*${s.name} <- …'`);
+        if (s.cell) { s.pointer = cls.name; return s; }
+        if (!cls) return s;
+        const op = s.updateOp === '<|' ? 'update' : 'set';
+        if (!answers(cls, op)) {
+          if (!pointers.has(s.name)) throw new Error(`'${s.name}' names a ${cls.name}, which has no '${op}', so '${s.name} ${s.updateOp || '<-'} …' has nothing to send to`);
+          throw new Error(`'${s.name}' points to a ${cls.name}, which has no '${op}': repoint it with '*${s.name} ${s.updateOp || '<-'} …'`);
+        }
+        return { type: 'ActorSetStatement', name: s.name, args: [{ expr: s.value, positional: true }], className: cls.name, ...(s.updateOp && { updateOp: s.updateOp }), ...(s.loc && { loc: s.loc }) };
+      }
+      if (s?.type === 'ActorSetStatement' && s.cell) {
+        throw new Error(`'*${s.name} <- …' repoints a cell, so it takes one value`);
+      }
+      // `a <- x, k: y`: the actor's `set` (or `update`), with several values.
+      if (s?.type === 'ActorSetStatement') {
+        const cls = pointers.get(s.name) ?? actors.get(s.name);
+        if (cls) {
+          const op = s.updateOp === '<|' ? 'update' : 'set';
+          if (!answers(cls, op)) throw new Error(`'${s.name}' names a ${cls.name}, which has no '${op}', so '${s.name} ${s.updateOp || '<-'} …' has nothing to send to`);
+          s.className = cls.name;
+        }
+      }
+      if (s?.type === 'SubscribeCall') {
+        const t = s.target;
+        if (t?.type === 'RefArg') {
+          if (!pointers.has(t.name)) throw new Error(`'${t.name}' holds a value, not an actor, so it's subscribed to as 'sub ${t.name}, …'`);
+          s.target = { type: 'RefRead', name: t.name, ...(t.loc && { loc: t.loc }) };
+        } else if ((t?.type === 'Identifier' || t?.type === 'RefRead') && pointers.has(t.name)) {
+          throw new Error(`'${t.name}' is the ${pointers.get(t.name).name} it points to, and an actor isn't a cell: subscribe to the pointer as 'sub *${t.name}, …'`);
+        }
+      }
+      return s;
+    };
+    // A pointer that may be null is narrowed before a call through it: inside
+    // `if (p) { … }`. `narrowed` holds the names tested so far.
+    const nullable = (name) => pointers.has(name) && encMembers(nullableTypes.get(name)).includes(null);
+    const named = (e) => ((e?.type === 'Identifier' || e?.type === 'RefRead') ? e.name : null);
+    const checkUse = (n, narrowed) => {
+      if (n.type !== 'DotCallExpr' && n.type !== 'DotAccessExpr') return;
+      const name = named(n.object);
+      if (name && nullable(name) && !narrowed.has(name)) {
+        throw new Error(`'${name}' may be null, so a call through it is guarded: 'if (${name}) { … }'`);
+      }
+    };
+    const walk = (n, narrowed) => {
+      if (!n || typeof n !== 'object') return;
+      if (Array.isArray(n)) { n.forEach((x, i) => { n[i] = lower(x); walk(n[i], narrowed); }); return; }
+      checkUse(n, narrowed);
+      if (n.type === 'IfExpr' && nullable(named(n.cond))) {
+        walk(n.cond, narrowed);
+        walk(n.then, new Set([...narrowed, named(n.cond)]));
+        walk(n.else, narrowed);
+        return;
+      }
+      for (const k in n) {
+        if (k === 'loc' || !n[k] || typeof n[k] !== 'object') continue;
+        if (!Array.isArray(n[k])) n[k] = lower(n[k]);
+        walk(n[k], narrowed);
+      }
+    };
+    walk(body, new Set());
+  };
+  for (const actor of ast.actors || []) {
+    const state = new Map();
+    const stateTypes = new Map();
+    for (const v of actor.stateVarDecls || []) {
+      if (v.isRef && classOf(v.typeNameEnc)) { state.set(v.name, classOf(v.typeNameEnc)); stateTypes.set(v.name, v.typeNameEnc); }
+    }
+    visit(actor.constructorBody, state, stateTypes);
+    visit(actor.initBody, state, stateTypes);
+    for (const fn of actor.functions || []) {
+      const scope = new Map(state);
+      const types = new Map(stateTypes);
+      for (const p of fn.params || []) if (p.ref && classOf(p.typeEnc)) { scope.set(p.name, classOf(p.typeEnc)); types.set(p.name, p.typeEnc); }
+      visit(fn.body, scope, types);
+    }
+  }
+}
+
 // A function that ends in an `if` replies with the value its path ends in:
 // `if (b) { "x" } else { 9 }` replies "x" or 9, each as its own type. When every
 // path ends in a value or a `return`, each path's value becomes its `return`, as
@@ -217,6 +353,7 @@ function validateProgram(ast, options = {}) {
   checkValueIfReturns(ast);
   lowerTailIfValues(ast);
   lowerCellMemberReads(ast);
+  lowerPointerWrites(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);

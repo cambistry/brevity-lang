@@ -228,7 +228,7 @@ describe('subclass consumption — a typed local or cell', () => {
 
   it('a typed cell and a write to it take subclass instances', () => {
     expect(() => compileSource(`${classes}
-      @f = { c *T = U(1, 2); c <- U(3, 4); return 1 }
+      @f = { c *T = U(1, 2); *c <- U(3, 4); return 1 }
     `)).not.toThrow();
   });
 
@@ -240,7 +240,7 @@ describe('subclass consumption — a typed local or cell', () => {
 
   it('a write to a typed cell refuses an instance of an unrelated class', () => {
     expect(() => compileSource(`${classes}
-      @f = { c *T = U(1, 2); c <- W(1); return 1 }
+      @f = { c *T = U(1, 2); *c <- W(1); return 1 }
     `)).toThrow("Cannot set 'c *T' to a value that is W: 'W' is not assignable to 'T'");
   });
 
@@ -254,14 +254,14 @@ describe('subclass consumption — a typed local or cell', () => {
   it('a write to a state cell takes a subclass instance', () => {
     expect(() => compileSource(`${classes}
       held *T = T(1)
-      @f! = { held <- U(1, 2) }
+      @f! = { *held <- U(1, 2) }
     `)).not.toThrow();
   });
 
   it('a write to a state cell refuses an instance of an unrelated class', () => {
     expect(() => compileSource(`${classes}
       held *T = T(1)
-      @f! = { held <- W(1) }
+      @f! = { *held <- W(1) }
     `)).toThrow("Cannot set 'held *T' to a value that is W: 'W' is not assignable to 'T'");
   });
 });

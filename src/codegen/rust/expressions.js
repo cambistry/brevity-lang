@@ -924,11 +924,14 @@ ${subRegLines.join('\n')}
     // own cell, or one of an actor it's declared in (src/outer_reads.js). The call
     // goes to that actor's per-instance handler.
     if (dotObjName && !eCtx?.selfSpawnedRefs?.has(dotObjName)) {
-      const t = classNameOf(expr.object.outer ? expr.object.outerTypeEnc
+      // A local pointer holds an instance's address too (src/validate.js lowerPointerWrites).
+      const pointer = !expr.object.outer && !G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.pointerLocals?.get(dotObjName) : undefined;
+      const t = pointer ?? classNameOf(expr.object.outer ? expr.object.outerTypeEnc
         : (G.ctx.stateVarNames?.has(dotObjName) ? G.ctx.stateVarDecls?.find(d => d.name === dotObjName)?.typeNameEnc : undefined));
-      if (G.ctx.actorInfo?.has(t) && classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor)) {
+      if (G.ctx.actorInfo?.has(t) && (pointer || classNeedsSpawnedInstances(G.ctx.actorInfo.get(t)?.actor))) {
         const cell = expr.object.outer
           ? outerRead({ ...expr.object, type: 'RefRead' })
+          : pointer ? `self.refs.get(${JSON.stringify(dotObjName)}).cloned().unwrap_or(Value::Null)`
           : `self.state.get("${stateKey(dotObjName)}").cloned().unwrap_or(Value::Null)`;
         const namedC = expr.args.filter(a => !a.positional);
         const positionalC = expr.args.filter(a => a.positional);

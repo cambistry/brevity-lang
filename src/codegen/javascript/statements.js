@@ -274,10 +274,7 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
     } else if (s.type === 'SetStatement') {
       _lastTypedName = null;
       _lastSetName = s.name;
-      if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        code += `\n  ${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
-      } else if (ctx.stateVarNames.has(s.name)) {
+      if (ctx.stateVarNames.has(s.name)) {
         code += `\n  this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
       } else {
         code += `\n  ${s.name}.value = ${genExpr(ctx, s.value)};`;
@@ -394,6 +391,11 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
           code += `\n  return BvObject.pack([${needsAwait ? 'await ' : ''}${exprCode}]);`;
         }
       }
+    } else if (s.type === 'ActorFieldSet' || s.type === 'ActorSetStatement') {
+      _lastTypedName = null;
+      _lastSetName = null;
+      const set = s.type === 'ActorFieldSet' ? genActorFieldSet(ctx, s) : genActorSet(ctx, s);
+      code += set.replace(/\n {8}/g, '\n  ');
     }
   }
   if (declaredReturnType !== '.' && declaredReturnType !== '()') {
@@ -515,6 +517,14 @@ function genIfBlockStatements(ctx, body, tmpVar, _outerEnv) {
       // Early exit from a silent function: no reply.
       lastTypedName = null;
       code += `\n        return BvObject.pack(undefined);`;
+    } else if (s.type === 'ActorFieldSet') {
+      lastTypedName = null;
+      code += genActorFieldSet(ctx, s);
+    } else if (s.type === 'ActorSetStatement') {
+      lastTypedName = null;
+      code += genActorSet(ctx, s);
+    } else {
+      throw new Error(`An if block can't hold a ${s.type} statement`);
     }
   }
   if (lastTypedName !== null) {
@@ -574,10 +584,7 @@ function genWhileBody(ctx, body, inner, outerEnv, counters) {
     } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
       code += `\n${inner}${genBlockBind(ctx, s, outerEnv)}`;
     } else if (s.type === 'SetStatement') {
-      if (ctx.childActorVars.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        code += `\n${inner}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
-      } else if (ctx.stateVarNames.has(s.name)) {
+      if (ctx.stateVarNames.has(s.name)) {
         code += `\n${inner}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
       } else {
         code += `\n${inner}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
@@ -592,6 +599,12 @@ function genWhileBody(ctx, body, inner, outerEnv, counters) {
       code += `\n${inner}let ${tmpVar} = null;\n${inner}${chainCode}`;
     } else if (s.type === 'ExprStatement') {
       code += `\n${inner}${genExpr(ctx, s.expr)};`;
+    } else if (s.type === 'ActorFieldSet') {
+      code += genActorFieldSet(ctx, s).replace(/\n {8}/g, `\n${inner}`);
+    } else if (s.type === 'ActorSetStatement') {
+      code += genActorSet(ctx, s).replace(/\n {8}/g, `\n${inner}`);
+    } else {
+      throw new Error(`A loop body can't hold a ${s.type} statement`);
     }
   }
   return code;
@@ -843,11 +856,6 @@ export function genLocals(ctx, body, outerEnv) {
     }
     if (s.type === 'SetStatement') {
       const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
-      if (ctx.childActorVars.has(s.name)) {
-        const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        return `\n        ${target}.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
-      }
       if (ctx.stateVarNames.has(s.name)) {
         // Private (or public) state-ref mutation may trigger re-evaluation of
         // any non-silent public fn whose body captures this ref. For each
@@ -872,58 +880,8 @@ export function genLocals(ctx, body, outerEnv) {
       }
       return `\n        ${resolved}.value = ${genExpr(ctx, s.value)};`;
     }
-    if (s.type === 'ActorFieldSet') {
-      // Wire shape: op is "$set"; the field is the last token of the `to`
-      // address, a public member bare.
-      const wireOp = '$set';
-      const toSelector = s.fieldName;
-      const v = genExpr(ctx, s.value);
-      // Remote dep (imported via *( "Alias": Alias { ... } )): post via
-      // binding addressed to the dependency's source and the field
-      // (`svc.bv:field`), bare as `to` always is. Include `ty` so the
-      // remote's schema check succeeds.
-      if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
-        const inferred = inferLiteralType(s.value);
-        const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : undefined;
-        const typeHint = inferred !== undefined ? inferred : envType;
-        // A union or `Anything` is tagged from the value (named, so it is read once).
-        const hintTag = typeHint === undefined ? null
-          : !isDynamicTy(typeHint) ? JSON.stringify(typeText(typeHint, ctx.depAliases))
-          : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
-        const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
-        const toExpr = JSON.stringify(joinAddress([ctx.depSource(s.objectName), toSelector]));
-        return `\n        this.#binding.post({ op: [[${v}], "$set"], to: ${toExpr}${tyField} });`;
-      }
-      let target;
-      if (ctx.stateVarNames?.has(s.objectName)) {
-        target = `this.#${stateKey(s.objectName)}`;
-      } else {
-        const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
-        target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
-      }
-      // Child actor: relative to the child, the receiver: `:field`.
-      const toExpr = JSON.stringify(joinAddress([null, toSelector]));
-      return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}, from: '__parent' });`;
-    }
-    if (s.type === 'ActorSetStatement') {
-      const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
-      const target = ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
-      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-      const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
-      const named = s.args.filter(a => !a.positional);
-      let payload;
-      if (named.length > 0) {
-        const obj = named.map(a => `${a.name}: ${genExpr(ctx, a.expr)}`).join(', ');
-        if (pos.length > 0) {
-          payload = `[${pos.join(', ')}, {${obj}}]`;
-        } else {
-          payload = `[{${obj}}]`;
-        }
-      } else {
-        payload = `[${pos.join(', ')}]`;
-      }
-      return `\n        ${target}.receive({ op: [${payload}, "${wireOp}"], from: '__parent' });`;
-    }
+    if (s.type === 'ActorFieldSet') return genActorFieldSet(ctx, s);
+    if (s.type === 'ActorSetStatement') return genActorSet(ctx, s);
     if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
       const tmpVar = `_if${counters.ifIdx++}`;
       const chainCode = genIfChain(ctx, s.expr, tmpVar, outerEnv);
@@ -1153,12 +1111,66 @@ function bodyStmtHasLabelExit(s) {
   return false;
 }
 
-// A write to a cell, a local ref, or a child actor held in a ref (which takes `$set`).
-function genSetStatement(ctx, s, indent) {
-  if (ctx.childActorVars?.has(s.name)) {
-    const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-    return `\n${indent}${jsIdent(s.name)}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
+// `obj.field <- v`: `$set` to the field of a child or a dependency's actor.
+function genActorFieldSet(ctx, s) {
+  // Wire shape: op is "$set"; the field is the last token of the `to`
+  // address, a public member bare.
+  const wireOp = '$set';
+  const toSelector = s.fieldName;
+  const v = genExpr(ctx, s.value);
+  // Remote dep (imported via *( "Alias": Alias { ... } )): post via
+  // binding addressed to the dependency's source and the field
+  // (`svc.bv:field`), bare as `to` always is. Include `ty` so the
+  // remote's schema check succeeds.
+  if (ctx.dependencyNames?.has(s.objectName) && !ctx.stateVarNames?.has(s.objectName)) {
+    const inferred = inferLiteralType(s.value);
+    const envType = s.value?.type === 'Identifier' ? ctx.currentTypeEnv?.get(s.value.name) : undefined;
+    const typeHint = inferred !== undefined ? inferred : envType;
+    // A union or `Anything` is tagged from the value (named, so it is read once).
+    const hintTag = typeHint === undefined ? null
+      : !isDynamicTy(typeHint) ? JSON.stringify(typeText(typeHint, ctx.depAliases))
+      : s.value?.type === 'Identifier' ? jsTyOf(ctx, typeHint, v) : null;
+    const tyField = hintTag ? `, 'ty': [[${hintTag}]]` : '';
+    const toExpr = JSON.stringify(joinAddress([ctx.depSource(s.objectName), toSelector]));
+    return `\n        this.#binding.post({ op: [[${v}], "$set"], to: ${toExpr}${tyField} });`;
   }
+  let target;
+  if (ctx.stateVarNames?.has(s.objectName)) {
+    target = `this.#${stateKey(s.objectName)}`;
+  } else {
+    const resolved = ctx.ssaScope?.get(s.objectName) || jsIdent(s.objectName);
+    target = ctx.childActorVars?.get(s.objectName) ? `${resolved}.value` : resolved;
+  }
+  // Child actor: relative to the child, the receiver: `:field`.
+  const toExpr = JSON.stringify(joinAddress([null, toSelector]));
+  return `\n        ${target}.receive({ op: [[${v}], ${JSON.stringify(wireOp)}], to: ${toExpr}, from: '__parent' });`;
+}
+
+// `a <- v` where `a` names an actor: `$set` (or `$update`) to it, its `set`.
+function genActorSet(ctx, s) {
+  const resolved = ctx.ssaScope?.get(s.name) || jsIdent(s.name);
+  const target = ctx.stateVarNames?.has(s.name) && !ctx.childActorVars.has(s.name) ? `this.#${stateKey(s.name)}`
+    : ctx.childActorVars.get(s.name) ? `${resolved}.value` : resolved;
+  const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+  const pos = s.args.filter(a => a.positional).map(a => genExpr(ctx, a.expr));
+  const named = s.args.filter(a => !a.positional);
+  let payload;
+  if (named.length > 0) {
+    const obj = named.map(a => `${a.name}: ${genExpr(ctx, a.expr)}`).join(', ');
+    if (pos.length > 0) {
+      payload = `[${pos.join(', ')}, {${obj}}]`;
+    } else {
+      payload = `[{${obj}}]`;
+    }
+  } else {
+    payload = `[${pos.join(', ')}]`;
+  }
+  return `\n        ${target}.receive({ op: [${payload}, "${wireOp}"], from: '__parent' });`;
+}
+
+// A write to a cell or a local ref. A cell holding an actor stores the new one; its
+// `set` is an ActorSetStatement (src/validate.js lowerPointerWrites).
+function genSetStatement(ctx, s, indent) {
   if (ctx.stateVarNames.has(s.name)) return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
   return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
 }

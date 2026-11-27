@@ -44,12 +44,25 @@ function assertBangValidRef(recv, method, isBang, table) {
 }
 
 // `@a <- v` writes this actor's published cell. It's one name to the statement forms.
+// `*a <- v` (and `*@a <- v`) writes the cell itself, where `a` names a cell holding an
+// actor (notes/actor-pointers-2026-11-27.md): the name's token is marked `cellWrite`.
+const OPERAND_ENDS = new Set(['IDENT', 'NUMBER', 'STRING', 'INTERP_STRING', 'RPAREN', 'RBRACKET', 'KEYWORD']);
 function joinOwnCellWrites(tokensIn) {
   const written = new Set();
   const out = [];
   for (let i = 0; i < tokensIn.length; i++) {
     const [t, next, after] = [tokensIn[i], tokensIn[i + 1], tokensIn[i + 2]];
-    if (t.type === 'AT' && next?.type === 'IDENT' && (after?.type === 'SET' || after?.type === 'UPDATE')) {
+    const isWrite = (tok) => tok?.type === 'SET' || tok?.type === 'UPDATE';
+    const prev = out[out.length - 1];
+    const atStatement = !prev || !OPERAND_ENDS.has(prev.type) || (prev.type === 'KEYWORD' && prev.value !== 'self');
+    if (t.type === 'STAR' && atStatement && next?.type === 'IDENT' && isWrite(after)) {
+      out.push({ ...next, cellWrite: true });
+      i++;
+    } else if (t.type === 'STAR' && atStatement && next?.type === 'AT' && after?.type === 'IDENT' && isWrite(tokensIn[i + 3])) {
+      written.add('@' + after.value);
+      out.push({ ...after, value: '@' + after.value, cellWrite: true });
+      i += 2;
+    } else if (t.type === 'AT' && next?.type === 'IDENT' && isWrite(after)) {
       written.add('@' + next.value);
       out.push({ ...next, value: '@' + next.value });
       i++;
@@ -202,6 +215,17 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   const AST = { ...ASTNodes };
   for (const k of ['identifier', 'refRead', 'fnRef', 'refArg', 'setStatement', 'actorSetStatement', 'actorFieldSet', 'reply', 'returnNode', 'functionCallExpr']) {
     AST[k] = located(ASTNodes[k]);
+  }
+  // `*a <- v`: the statement built for a name read from a `cellWrite` token writes the cell.
+  const cellWrites = [];
+  for (const k of ['setStatement', 'actorSetStatement']) {
+    const make = AST[k];
+    AST[k] = (name, ...rest) => {
+      const node = make(name, ...rest);
+      const i = cellWrites.lastIndexOf(name);
+      if (i >= 0) { cellWrites.splice(i, 1); node.cell = true; }
+      return node;
+    };
   }
   const functionNames = new Set();
   const localScopes = [new Set()];
@@ -384,6 +408,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   const take = () => {
     const at = pos;
     const tok = consume();
+    if (tok?.cellWrite) cellWrites.push(tok.value);
     if (tokens === fileTokens && at < fileTokens.length) takenAt[at] = readAt[at];
     return tok;
   };
@@ -2305,7 +2330,14 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (args.length !== 2 || args.some(a => a?.type === 'NamedArgsBag')) throw new Error("'sub' takes what it subscribes to and a function");
       [subject, handler] = args;
     } else {
+      // `sub *p, …`: the cell `p` itself, where `p` holds an actor (src/validate.js
+      // lowerPointerWrites).
+      const cell = peek().type === 'STAR' && ['AT', 'IDENT'].includes(tokens[pos + 1]?.type) ? !!take() : false;
       subject = parseExpr();
+      if (cell) {
+        if (subject?.type !== 'RefRead' && subject?.type !== 'Identifier') throw new Error("'sub *' takes the name of a cell");
+        subject = AST.refArg(subject.name);
+      }
       if (peek().type === 'COMMA') {
         take();
         handler = parsePrimary();
@@ -4519,7 +4551,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (baseTypes.has(typeName) || refsSelf) {
         const setter = AST.functionDecl('set@' + op,
           [{ name: '_v', type: typeName, positional: true }],
-          [AST.setStatement('@' + op, AST.identifier('_v')), AST.silentTerminator()],
+          [Object.assign(AST.setStatement('@' + op, AST.identifier('_v')), { setter: true }), AST.silentTerminator()],
         );
         // `$sub` to a cell is not a declared handler — it's an implicit
         // affordance on every non-silent public surface, dispatched generically
@@ -5838,7 +5870,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (functions.some(f => f.name === 'set.' + stmt.name)) continue;
       functions.push(AST.functionDecl('set.' + stmt.name,
         [{ name: '_v', type: stmt.typeName, positional: true }],
-        [AST.setStatement(stmt.name, AST.identifier('_v')), AST.silentTerminator()],
+        [Object.assign(AST.setStatement(stmt.name, AST.identifier('_v')), { setter: true }), AST.silentTerminator()],
       ));
     }
     refVarScopes.pop(); // end actor-level ref scope

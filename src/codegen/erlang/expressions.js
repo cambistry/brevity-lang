@@ -208,7 +208,28 @@ export function erlCellNotifyLines(ctx, cell, cellType, I, sfx = '', label = '@'
 // The sends genExpr is wrapping as operands, so it generates each one's own code once.
 const SENDS_WRAPPING = new Set();
 
+// `a <- v` where `a` names an actor: `$set` (or `$update`) to it, its `set`
+// (src/validate.js lowerPointerWrites). `val` generates an arg's value in place.
+function erlActorSet(ctx, s, sCtx, typeEnv, val) {
+  const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+  const posArgs = s.args.filter(a => a.positional).map(a => val(a.expr));
+  const namedArgs = s.args.filter(a => !a.positional);
+  let payload;
+  if (namedArgs.length > 0) {
+    const namedMap = namedArgs.map(a => `${erlString(a.name)} => ${val(a.expr)}`).join(', ');
+    payload = posArgs.length > 0 ? `[${posArgs.join(', ')}, #{${namedMap}}]` : `#{${namedMap}}`;
+  } else {
+    payload = `[${posArgs.join(', ')}]`;
+  }
+  const child = sCtx?.childActorRefs?.get(s.name);
+  if (child) return `child_${child.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, ${payload}, _Id, _From)`;
+  const pid = genExpr(ctx, { type: sCtx?.refVars?.has(s.name) || ctx.refNames?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
+  return `bv_inst_call_(${pid}, <<"${wireOp}">>, ${payload})`;
+}
+
 function genExpr(ctx, expr, typeEnv, sCtx) {
+  // Code already generated in an inner scope (a lambda's args to a construction).
+  if (expr?.type === 'ErlCode') return expr.code;
   // A send as an operand is its reply's one value (src/codegen/send_operands.js).
   if (expr && isSendOperand(expr) && !SENDS_WRAPPING.has(expr)) {
     SENDS_WRAPPING.add(expr);
@@ -1418,6 +1439,14 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
       if (e.op === '<=') return `(${left} =< ${right})`;
       return `(${left} ${e.op} ${right})`;
     }
+    // A class's construction: built as anywhere else, its args generated here.
+    if (e.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' && ctx.actorInfo?.has(e.callee.name) && !innerRenames.has(e.callee.name)) {
+      const code = (a) => ({ type: 'ErlCode', code: genInnerExpr(a) });
+      const args = (e.args || []).map(a => (a.type === 'NamedArgsBag'
+        ? { ...a, fields: Object.fromEntries(Object.entries(a.fields).map(([k, v]) => [k, code(v)])) }
+        : code(a)));
+      return genExpr(ctx, { ...e, args }, typeEnv, sCtx);
+    }
     if (e.type === 'FunctionCallExpr') {
       const callee = genInnerExpr(e.callee);
       const posArgs = (e.args || []).filter(a => a.type !== 'NamedArgsBag').map(a => genInnerExpr(a));
@@ -1555,17 +1584,11 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
             }
           }
         }
+        if (s.type === 'ActorSetStatement') {
+          lines.push(erlActorSet(ctx, s, sCtx, typeEnv, genInnerExpr));
+        }
         if (s.type === 'SetStatement') {
-          if (sCtx?.childActorRefs?.has(s.name)) {
-            const actorName = sCtx.childActorRefs.get(s.name);
-            const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-            lines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInnerExpr(s.value)}], _Id, _From)`);
-          } else if (sCtx?.selfSpawnedRefs?.has(s.name) && !refParams.has(s.name)) {
-            // Instance process captured from the enclosing body.
-            const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-            const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
-            lines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genInnerExpr(s.value)}])`);
-          } else if (refParams.has(s.name)) {
+          if (refParams.has(s.name)) {
             lines.push(`put(${innerVarName(s.name)}, ${genInnerExpr(s.value)})`);
           } else {
             lines.push(`put(${erlSetTarget(ctx, s.name)}, ${genInnerExpr(s.value)})`);
@@ -1913,16 +1936,12 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       continue;
     }
     if (s.type === 'SetStatement') {
-      // A ref holding a child actor, or an instance it spawned: the write is its `$set`.
-      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-      if (sCtx?.childActorRefs?.has(s.name)) {
-        lines.push(`child_${sCtx.childActorRefs.get(s.name).toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInner(s.value)}], _Id, _From)`);
-      } else if (sCtx?.selfSpawnedRefs?.has(s.name)) {
-        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
-        lines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genInner(s.value)}])`);
-      } else {
-        lines.push(`put(${erlSetTarget(ctx, s.name)}, ${genInner(s.value)})`);
-      }
+      lines.push(`put(${erlSetTarget(ctx, s.name)}, ${genInner(s.value)})`);
+      lastAssignVar = null;
+      continue;
+    }
+    if (s.type === 'ActorSetStatement') {
+      lines.push(erlActorSet(ctx, s, sCtx, typeEnv, genInner));
       lastAssignVar = null;
       continue;
     }
@@ -1997,6 +2016,7 @@ function genFnWhileStatement(ctx, node, genInner, prefix) {
 }
 
 export {
+  erlActorSet,
   erlSendVars,
   erlSetTarget,
   genExpr,

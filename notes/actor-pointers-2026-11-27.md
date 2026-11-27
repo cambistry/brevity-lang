@@ -1,11 +1,9 @@
 # A cell of a class is a pointer — 2026-11-27
 
-Decided in outline: `*C` on a class declares a pointer, and a prefix `*` dereferences it. The
-form is borrowed from C. Points 1–4 below are proposals, not settled.
-
-Builds on `capability-sigils-2026-05-16.md` (`*` actorizes a value type) and
-`reference-fields-in-types-2026-10-26.md` (a reference is data: an address). Rejected
-alternative: a `Ref[C]` value type (below).
+Decided with the user on 2026-11-27, as a temporary form. Builds on
+`capability-sigils-2026-05-06.md` (call-site `*name` grants a cell) and
+`capability-sigils-2026-05-16.md` (`*` actorizes a value type), and on
+`reference-fields-in-types-2026-10-26.md` (a reference is data: an address).
 
 ## The problem
 
@@ -22,61 +20,67 @@ pointer, as does swapping one instance for another.
 
 ## The form
 
+`*C` on a class declares a pointer cell. As for every cell, a bare name is what the cell holds (the
+actor), and `*name` is the cell itself, as in the call-site grant `bump!(*n)`.
+
 ```brevity
 C = *{ @go = {} }
 a = C()
 b = C()
 cref *C = a
-cref = b        // error: a name is bound once
-cref <- b       // repoints cref at b
-cref.go         // error: cref is the pointer, not the actor
-*cref.go        // calls go on the actor cref points to
+cref = b                  // error: a name is bound once
+*cref <- b                // repoints cref at b
+cref <- v                 // sends $set to the actor; an error unless C has `set`
+cref.go()                 // calls go on the actor
+f(cref)                   // passes the actor
+f(*cref)                  // grants the pointer to a (p *C) param, which may repoint it
+sub *cref, (p C) { … }    // the cell's updates: each repointing
+sub cref, …               // error: an actor isn't a cell
 ```
 
-- **`*C` on a class is a pointer cell.** It holds an address of a C or of a subclass of C.
-- **A prefix `*` dereferences it.** `*cref` is the actor.
-- **`<-` has one meaning: write what the left side names.** `cref <- b` repoints the pointer, and
-  `*cref <- 42` sends `$set` to the actor (its `set`).
-- **The cell and the actor are each reachable.** `cref.subscribe` watches the pointer being
-  repointed, and `*cref.x.subscribe` watches the actor's `x`.
+- **The class check applies to every repointing** (`class-ancestry` ticket): `*cref <- w` for an
+  unrelated class is a compile error, as is the declaration `cref *C = w`.
+- **`cref <- v` is the actor's `set`.** It compiles only when the class (or an ancestor) declares
+  `set`, and its value is checked against `set`'s param.
 - **Sugar:** `b = *Box(0)` is `b *Box = Box(0)`, a pointer to a new Box, as `i = *Integer(0)` is
   `i *Integer = 0`.
-- **Params:** `*` on a param already means "may write". `(p *C)` takes a pointer the callee may
-  repoint, like C's pointer to a pointer.
-- **Class check:** a pointer is declared, initialised and repointed only with a C or a subclass
-  (`class-ancestry` ticket). `cref <- w` for an unrelated class is a compile error.
+- **A pointer that may be null is narrowed before use.** In `@peer *class | null = null`,
+  `if (@peer)` tests it and `@peer.gossip!(t)` inside the guard calls through it. Outside a guard,
+  the call is a compile error, as for any union.
+- **A name bound to an actor is not a cell** (`b = Box(0)`, `b Box = …`): `b <- v` is its `set`,
+  as for a pointer, and `*b <- v` is an error, since there's no cell to repoint.
+- **`*p <- v` takes one value.** `*p <- a, b` is an error.
+- **Value cells are unchanged:** `n <- 1` writes, `sub n, …` subscribes, `bump!(*n)` grants. Only a
+  cell holding an actor takes `*` on a write or a subscription, because only there does a bare name
+  have two possible targets.
 
-### Parsing
+### Why the cell is `*name`, not the actor
 
-In an expression, a prefix `*` today takes only a constructor (`*Integer(0)`, `*Box(0)`); `*n`
-alone is a parse error, so the dereference doesn't collide. `2 *y` stays multiplication, because
-a prefix `*` appears only where an operand is expected.
-
-## Proposals (not settled)
-
-1. **Precedence differs from C.** In C, `*p.go` is `*(p.go)`; C programmers write `(*p).go` or
-   `p->go`. Here `*cref.go` dereferences `cref` first: a prefix `*` binds tighter than `.`.
-   `*a.b.c` dereferences only `a`, so a pointer held in a field takes `*(a.next).go`.
-2. **A bare pointer as a value.** `f(*cref)` passes the actor. `f(cref)` passes the pointer, so the
-   callee sees later repointing. Only a `(p *C)` param takes one.
-3. **Value cells stay implicit.** `n *Integer` reads as `n`, never `*n`. A dereference is needed
-   only where the cell holds an actor, because only there does `.` have two possible targets.
-4. **Null.** In `@peer *class | null = null`, `if (@peer)` tests the pointer, and
-   `*@peer.gossip!(t)` calls through it. Dereferencing a pointer that may be null is a compile
-   error until a guard narrows it, as for any union.
+The user first proposed C's dereference: `cref.go` an error and `*cref.go` the call. But the
+call-site grant already gives `*name` the opposite meaning (the cell itself), in
+`functions/param_capabilities.test.js` and `operators/ref.test.js`. Following it keeps pointers
+consistent with every other cell. "Temporary": the C form may return once the grant has a
+spelling of its own.
 
 ## Rejected: `Ref[C]`
 
-A value type for an address, written `peer *Ref[class] | null`, with `*` left for value types
-only. It's consistent, but it says less than the C form: it doesn't separate the pointer from the
-actor at each use, so `peer.x` still has two possible targets.
+A value type for an address, written `peer *Ref[class] | null`, with `*` left for value types only.
+It's consistent, but at each use it doesn't separate the pointer from the actor.
+
+## Open
+
+- `sub` takes a cell of the actor it's in (`@name`, `#name`), not a local cell, for any cell; so
+  `sub *p` on a local pointer is refused with the general error.
+- A call-site grant (`f(*p)`) reaches only a local function, for any cell.
+- The null rule covers pointers only. A plain local typed `T | null` still compiles a call through
+  it unguarded.
 
 ## What changes
 
-- `self/peer.test.js` and `syntax/type_names.test.js`: `@peer.gossip!(t)` becomes
-  `*@peer.gossip!(t)`.
-- `classes/outer_reads.test.js` ("a file cell holding an actor"): `counter.get()` becomes
-  `*counter.get()`.
-- `cam_test/set.test.js` ("child actor via normal dispatch"): `b <- 42` becomes `*b <- 42`.
-- A `.` on a class-typed cell is a compile error. The `$set` forwarding in each target's cell-write
-  codegen goes.
+- Cell writes and repointings store the address on js, erlang and rust, for local and state cells.
+  The `$set` forwarding on a cell write moves to `cref <- v`.
+- `self/peer.test.js` and `syntax/type_names.test.js`: `a.peer <- b` from outside stays the
+  auto-setter. Inside the class, a repointing is `*@peer <- p`.
+- `classes/outer_reads.test.js` ("a file cell holding an actor"): unchanged; it only calls through.
+- `cam_test/set.test.js` ("child actor via normal dispatch"): `b <- 42` stays, since `Box` has
+  `set`.
