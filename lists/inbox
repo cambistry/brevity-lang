@@ -73,5 +73,4 @@ kanban/tickets/release-expired-dom-rep-actors-reference-counting-gc.md
 kanban/tickets/represent-negated-self-as-clauses-in-service-document.md
 kanban/tickets/predicates.md
 kanban/tickets/clone.md
-kanban/tickets/test-get-introspects-non-scalar-types.md
 kanban/tickets/recursive-capture-process.md
