@@ -53,7 +53,6 @@ kanban/tickets/constructor-blocks-bind-cells-the-way-handlers-do.md
 kanban/tickets/define-what-a-failed-file-construction-does.md
 kanban/tickets/objects-in-parens-on-a-bind.md
 kanban/tickets/unannotated-call-arithmetic-in-a-return-differs-between.md
-kanban/tickets/rust-arithmetic-on-untyped-operands-defaults-to-0.md
 kanban/tickets/null-as-list-from-a-remote-passes-on-js.md
 kanban/tickets/typed-params-go-unchecked-on-public-handlers-with-an-empty.md
 kanban/tickets/as-doesn-t-check-class-types-function-types-or-undeclared.md
