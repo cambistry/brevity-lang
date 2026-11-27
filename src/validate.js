@@ -151,7 +151,8 @@ function lowerCellMemberReads(ast) {
 // path ends in a value or a `return`, each path's value becomes its `return`, as
 // `if (b) { return "x" } else { return 9 }` is written, so every target replies
 // and tags it as it does a `return`. An `if` with a path that gives no value (no
-// `else`) is left as it is.
+// `else`) is left as it is. A value after a guard (`if (b) return "x"` then `9`)
+// is the reply on the path past the guard, so it becomes the function's `return`.
 function lowerTailIfValues(ast) {
   const ret = (expr) => ({ type: 'Return', fields: [{ expr, type: null, positional: true }] });
   const isTailIf = (e) => e?.type === 'IfExpr' && !e.boolOp;
@@ -185,13 +186,27 @@ function lowerTailIfValues(ast) {
       if (isTailIf(last.expr)) lower(last.expr); else b.body[i] = ret(last.expr);
     }
   };
+  // A guard: an `if` statement with a `return` in it, ahead of the tail.
+  const isGuard = (st) => (st?.type === 'ImplicitReturn' || st?.type === 'ExprStatement') && isTailIf(st.expr)
+    && JSON.stringify(st.expr).includes('"type":"Return"');
   const visitFns = (fns) => {
     for (const fn of fns || []) {
       if (fn.actorDef) visitFns(fn.actorDef.functions);
       if (typeof fn.name !== 'string' || fn.name.endsWith('.') || !Array.isArray(fn.body)) continue;
-      const last = fn.body[fn.body.length - 1];
-      if (last?.type !== 'ImplicitReturn' || last.typeName || last.typeNameEnc !== undefined || !ends(last.expr)) continue;
-      lower(last.expr);
+      const i = fn.body.length - 1;
+      const last = fn.body[i];
+      // A trailing call is a braced body's reply too, as each target reads one.
+      const tailCall = last?.type === 'ExprStatement' && ['FunctionCallExpr', 'DotCallExpr'].includes(last.expr?.type);
+      if (tailCall && fn.body.slice(0, i).some(isGuard)) {
+        fn.body[i] = { type: 'Reply', fields: [{ expr: last.expr, type: null, positional: true }] };
+        continue;
+      }
+      if (last?.type !== 'ImplicitReturn' || last.typeName || last.typeNameEnc !== undefined) continue;
+      if (ends(last.expr)) { lower(last.expr); continue; }
+      // A value after a guard is the function's reply on the path past it: its return.
+      if (!isTailIf(last.expr) && last.expr?.type !== 'LabelInvoke' && last.expr?.type !== 'CatchExpr' && fn.body.slice(0, i).some(isGuard)) {
+        fn.body[i] = { type: 'Reply', fields: [{ expr: last.expr, type: null, positional: true }] };
+      }
     }
   };
   for (const actor of ast.actors || []) visitFns(actor.functions);

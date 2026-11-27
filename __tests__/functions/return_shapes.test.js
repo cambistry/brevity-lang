@@ -565,3 +565,69 @@ describe('a value in a tail branch', () => {
     );
   });
 });
+
+// A value after a guard (`if (c) return v`) is the reply on the path past it, as
+// its own type; the guard's path replies with its own value and type.
+describe('a tail value after a guard', () => {
+  const script = `
+    nine = () -> 9
+    @one = (b Boolean) {
+      if (b) return "x"
+      9
+    }
+    @two = (n Integer) {
+      if (n > 10) return "big"
+      if (n > 5) return "mid"
+      n * 2
+    }
+    @call = (b Boolean) {
+      if (b) return "x"
+      nine()
+    }
+    C = *{
+      @m = (b Boolean) {
+        if (b) return "x"
+        9
+      }
+    }
+    @inClass = (b Boolean) {
+      c = C()
+      return c.m(b)
+    }
+  `;
+
+  it('one guard', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'one'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [9], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[true], 'one'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: ['x'], ty: ['Text'], to: 'c' } },
+    );
+  });
+
+  it('several guards', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[7], 'two'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: ['mid'], ty: ['Text'], to: 'c' } },
+      { input: { id: '2', op: [[2], 'two'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [4], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  // A call's reply is forwarded, and claims no type of its own here.
+  it('a call as the tail value', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'call'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [9], to: 'c' } },
+    );
+  });
+
+  it('in a class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'inClass'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [9], to: 'c' } },
+      { input: { id: '2', op: [[true], 'inClass'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: ['x'], to: 'c' } },
+    );
+  });
+});
