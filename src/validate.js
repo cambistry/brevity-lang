@@ -146,9 +146,61 @@ function lowerCellMemberReads(ast) {
   walk(ast.actors);
 }
 
+// A function that ends in an `if` replies with the value its path ends in:
+// `if (b) { "x" } else { 9 }` replies "x" or 9, each as its own type. When every
+// path ends in a value or a `return`, each path's value becomes its `return`, as
+// `if (b) { return "x" } else { return 9 }` is written, so every target replies
+// and tags it as it does a `return`. An `if` with a path that gives no value (no
+// `else`) is left as it is.
+function lowerTailIfValues(ast) {
+  const ret = (expr) => ({ type: 'Return', fields: [{ expr, type: null, positional: true }] });
+  const isTailIf = (e) => e?.type === 'IfExpr' && !e.boolOp;
+  // Whether every path of an `if` ends in a value or a return.
+  const ends = (node) => {
+    if (!isTailIf(node) || !node.else) return false;
+    const branchEnds = (b) => {
+      if (!b) return false;
+      if (b.type === 'IfExpr') return ends(b);
+      if (b.expr) return b.expr.type !== 'LabelInvoke' && (!isTailIf(b.expr) || ends(b.expr));
+      const last = b.body?.[b.body.length - 1];
+      if (last?.type === 'Return') return true;
+      if (last?.type !== 'ImplicitReturn' || last.typeName || last.typeNameEnc !== undefined) return false;
+      return isTailIf(last.expr) ? ends(last.expr) : last.expr?.type !== 'LabelInvoke';
+    };
+    return branchEnds(node.then) && branchEnds(node.else);
+  };
+  // Each path's value, its return, in place; a nested `if` is a path's last statement.
+  const lower = (node) => {
+    for (const k of ['then', 'else']) {
+      const b = node[k];
+      if (b.type === 'IfExpr') { lower(b); continue; }
+      if (b.expr) {
+        if (isTailIf(b.expr)) { lower(b.expr); b.body = [{ type: 'ImplicitReturn', expr: b.expr, typeName: null }]; } else b.body = [ret(b.expr)];
+        delete b.expr;
+        continue;
+      }
+      const i = b.body.length - 1;
+      const last = b.body[i];
+      if (last.type !== 'ImplicitReturn') continue;
+      if (isTailIf(last.expr)) lower(last.expr); else b.body[i] = ret(last.expr);
+    }
+  };
+  const visitFns = (fns) => {
+    for (const fn of fns || []) {
+      if (fn.actorDef) visitFns(fn.actorDef.functions);
+      if (typeof fn.name !== 'string' || fn.name.endsWith('.') || !Array.isArray(fn.body)) continue;
+      const last = fn.body[fn.body.length - 1];
+      if (last?.type !== 'ImplicitReturn' || last.typeName || last.typeNameEnc !== undefined || !ends(last.expr)) continue;
+      lower(last.expr);
+    }
+  };
+  for (const actor of ast.actors || []) visitFns(actor.functions);
+}
+
 function validateProgram(ast, options = {}) {
   run.ast = ast;
   checkValueIfReturns(ast);
+  lowerTailIfValues(ast);
   lowerCellMemberReads(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);

@@ -478,3 +478,90 @@ describe('an unannotated bind of a computed value', () => {
     );
   });
 });
+
+// A function that ends in an `if` replies with the value its path ends in, each as
+// its own type, in a file and in a class, through `else if` chains and nested `if`s,
+// and beside a branch that returns.
+describe('a value in a tail branch', () => {
+  const script = `
+    @mixed = (b Boolean) {
+      if (b) { "x" } else { 9 }
+    }
+    @same = (b Boolean) {
+      if (b) { 1 } else { 2 }
+    }
+    @chain = (n Integer) {
+      if (n > 10) { "big" } else if (n > 5) { 7 } else { "small" }
+    }
+    @nested = (a Boolean, b Boolean) {
+      if (a) { if (b) { 1 } else { 2 } } else { "no" }
+    }
+    @withReturn = (n Integer) {
+      if (n > 10) { return "early" } else { n * 2 }
+    }
+    C = *{
+      @m = (b Boolean) {
+        if (b) { "x" } else { 9 }
+      }
+    }
+    @inClass = (b Boolean) {
+      c = C()
+      return c.m(b)
+    }
+  `;
+
+  it('branches of different types', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'mixed'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: ['x'], ty: ['Text'], to: 'c' } },
+      { input: { id: '2', op: [[false], 'mixed'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: [9], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('branches of the same type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[false], 'same'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: [2], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('an else if chain', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[20], 'chain'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: ['big'], ty: ['Text'], to: 'c' } },
+      { input: { id: '2', op: [[7], 'chain'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [7], ty: ['Integer'], to: 'c' } },
+      { input: { id: '3', op: [[1], 'chain'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '3', re: ['small'], ty: ['Text'], to: 'c' } },
+    );
+  });
+
+  it('a nested if', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true, false], 'nested'], ty: [['Boolean', 'Boolean']], from: 'c' } },
+      { output: { id: '1', re: [2], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[false, true], 'nested'], ty: [['Boolean', 'Boolean']], from: 'c' } },
+      { output: { id: '2', re: ['no'], ty: ['Text'], to: 'c' } },
+    );
+  });
+
+  it('beside a branch that returns', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[20], 'withReturn'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: ['early'], ty: ['Text'], to: 'c' } },
+      { input: { id: '2', op: [[3], 'withReturn'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [6], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  // The file forwards the class's reply, which claims no type of its own here.
+  it('in a class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[true], 'inClass'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '1', re: ['x'], to: 'c' } },
+      { input: { id: '2', op: [[false], 'inClass'], ty: [['Boolean']], from: 'c' } },
+      { output: { id: '2', re: [9], to: 'c' } },
+    );
+  });
+});
