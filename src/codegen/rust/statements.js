@@ -1283,7 +1283,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             } else if (item.positional) {
-              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx}))`;
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             }
           }
@@ -1300,9 +1300,25 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
               const accessor = `${tempName}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             } else if (item.positional) {
-              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+              const accessor = `${tempName}.positional.get(${item.idx}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx}))`;
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
             }
+          }
+        } else {
+          // Any other call (a function held in a name): its reply, packed.
+          const tempName = `_r${G.ctx.fnTempCounter++}`;
+          // The whole reply, not its one value: a call that ends in `.one_or_null()` without it.
+          const whole = genRustExpr(s.source, typeEnv).replace(/BvObject::pack\(&(_cfr\w*)\)\.one_or_null\(\) \}$/, '$1 }');
+          lines.push(`${I}let ${tempName} = BvObject::pack(&${whole});`);
+          for (const item of s.pattern) {
+            if (item.discard) continue;
+            const key = item.named ? item.name : item.key;
+            const accessor = key !== undefined && !item.positional
+              ? `${tempName}.named.get(${JSON.stringify(key)}).cloned().unwrap_or(Value::Null)`
+              : `${tempName}.positional.get(${item.idx}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx}))`;
+            lines.push(item.typeEnc !== undefined
+              ? `${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`
+              : `${I}let ${mintRustSsa(item.name)} = ${accessor};`);
           }
         }
       } else if (s.source.type === 'DotCallExpr') {
@@ -1385,7 +1401,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
           for (const item of s.pattern) {
             if (item.discard) continue;
             const accessor = item.positional
-              ? `${tempName}_s.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`
+              ? `${tempName}_s.positional.get(${item.idx}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx}))`
               : `${tempName}_s.named.get(${JSON.stringify(item.key || item.name)}).cloned().unwrap_or(Value::Null)`;
             if (item.typeEnc !== undefined) {
               lines.push(`${I}let ${mintRustSsa(item.name)}: ${rustType(item.typeEnc)} = ${convertFromValue(accessor, item.typeEnc)};`);
@@ -1518,7 +1534,7 @@ function genRustDestructureAssignBody(s, typeEnv, sCtx, I, lines, i, fnDefs) {
             const accessor = `${srcExpr}.named.get(${JSON.stringify(item.key)}).cloned().unwrap_or(Value::Null)`;
             lines.push(`${I}let ${mintRustSsa(item.name)}: ${rType} = ${convertFromValue(accessor, itemType)};`);
           } else if (item.positional) {
-            const accessor = `${srcExpr}.positional.get(${item.idx}).cloned().unwrap_or(Value::Null)`;
+            const accessor = `${srcExpr}.positional.get(${item.idx}).cloned().unwrap_or_else(|| panic!("destructure: no positional value {}", ${item.idx}))`;
             lines.push(`${I}let ${mintRustSsa(item.name)}: ${rType} = ${convertFromValue(accessor, itemType)};`);
           }
         }

@@ -1278,7 +1278,7 @@ export function genDestructureAssign(ctx, { pattern, source }, overrideSrc, inde
     if (item.key !== undefined)
       return `\n${indent}const ${ssaName} = ${wrapList(named(item.key), item.typeEnc)};`;
     if (item.positional)
-      return `\n${indent}const ${ssaName} = ${wrapList(`${src}.positional[${item.idx}]`, item.typeEnc)};`;
+      return `\n${indent}const ${ssaName} = ${wrapList(`_bvPositional(${src}, ${item.idx})`, item.typeEnc)};`;
     return '';
   }).join('');
 }

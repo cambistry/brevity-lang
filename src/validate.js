@@ -3352,6 +3352,7 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
     }
     if (callSrc && callSrc.attestedAsEnc === undefined) {
       const called = callReturns(callSrc, callShape);
+      if (called && s.type === 'DestructureAssign') checkPositionalCount(s.pattern, called.label, called.shapes);
       if (called) checkAnnotationCovers(s, called.label, called.shapes, actorByName);
       else if (s.type === 'TypedAssign' && !isCall(callSrc)) checkAnnotationValue(s, valueType(callSrc), actorByName);
     }
@@ -3617,6 +3618,16 @@ function spreadObjectReturns(ast) {
 
 // `:x = f()` (or `x: v = f()`) needs f to return a named `x`. A sole positional
 // does not bind into a named pattern item — bind it by position: `x T = f()`.
+// A destructure names no more positional slots than the call returns, on any path.
+function checkPositionalCount(pattern, calleeLabel, shapes) {
+  if (!shapes || shapes.opaque || shapes.orSelf || !shapes.alternatives.length) return;
+  const names = pattern.filter(item => item.positional && !item.rest).length;
+  const most = Math.max(...shapes.alternatives.map(alt => alt.filter(slot => slot.name === null).length));
+  if (names > most) {
+    throw new Error(`'${calleeLabel}()' returns ${most} positional value${most === 1 ? '' : 's'}; this destructure names ${names}`);
+  }
+}
+
 function checkNamedReturns(pattern, calleeLabel, shape) {
   if (!shape) return;
   const { keys } = shape;

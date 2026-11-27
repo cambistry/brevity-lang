@@ -627,6 +627,11 @@ function _bvAsTry(v, d) {
   if (v === null || typeof v !== 'object' || v instanceof BvDecimal) return _BV_AS_NO;
   return _bvAsFields(v, d);
 }
+// A destructure's positional slot: the value has one there, or the destructure fails.
+function _bvPositional(v, i) {
+  if (!v || !Array.isArray(v.positional) || v.positional.length <= i) throw new Error('destructure: no positional value ' + i);
+  return v.positional[i];
+}
 function _bvAs(v0, d, name) {
   const sole = v0 !== null && typeof v0 === 'object' && Array.isArray(v0.positional) && 'named' in v0
     && v0.positional.length === 1 && Object.keys(v0.named).length === 0;
