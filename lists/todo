@@ -6,3 +6,4 @@ kanban/tickets/a-type-declaration-carries-a-namespace-of-functions.md
 kanban/tickets/class-ancestry.md
 kanban/tickets/valueless-attributes.md
 kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
+kanban/tickets/opre-escape-a-literal-in-message-strings.md
