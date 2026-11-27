@@ -366,7 +366,7 @@ describe('subscribe — a cell the function declares', () => {
     expect(() => compileSource(`
       T = *(x Integer) { @a = () -> x }
       @f = {
-        c *T = T(1)
+        c = *T(1)
         sub *c, (p T) { x = 1 }
         return 1
       }

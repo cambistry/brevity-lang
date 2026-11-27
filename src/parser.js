@@ -1812,7 +1812,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           const typeName = parseType();
           addRef(name);
           const value = parseCellConstruction(typeName);
-          body.push(AST.refDecl(name, null, value));
+          // `v = *T(…)` is `v *T = T(…)`: the cell has its type.
+          body.push(AST.refDecl(name, typeName, value));
         } else {
           const value = parseRHSValue();
           if (value.type === 'Function') {
@@ -4314,7 +4315,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
           const typeName = parseType();
           addRef(name);
           const value = parseCellConstruction(typeName);
-          body.push(AST.refDecl(name, null, value));
+          // `v = *T(…)` is `v *T = T(…)`: the cell has its type.
+          body.push(AST.refDecl(name, typeName, value));
         } else {
           const value = parseRHSValue();
           if (value.type === 'Function') {
@@ -5292,7 +5294,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         take(); // *
         const typeName = parseType();
         addRef(name);
-        constructorBody.push(AST.refDecl(name, null, parseCellConstruction(typeName)));
+        // `v = *T(…)` is `v *T = T(…)`: the cell has its type.
+        constructorBody.push(AST.refDecl(name, typeName, parseCellConstruction(typeName)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'set') {
         // set = (val) { ... } — syntactic sugar for the <- handler
         take(); // 'set'

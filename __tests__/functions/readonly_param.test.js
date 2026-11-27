@@ -183,7 +183,7 @@ describe('readonly param — &Type rejects mutation', () => {
       type Point(Integer, Integer)
       @run
         =
-        coords *Point = Point(0, 0)
+        coords = *Point(0, 0)
         replace = (p &Point) { p <- Point(7, 8) }
         replace(coords)
         return :coords

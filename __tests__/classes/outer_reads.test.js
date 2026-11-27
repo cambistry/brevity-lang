@@ -282,7 +282,7 @@ describe('a file cell holding an actor', () => {
       @bump! = { c <- c + 1 }
     }
 
-    counter *Counter = Counter()
+    counter = *Counter()
 
     W = *{
       @get = {

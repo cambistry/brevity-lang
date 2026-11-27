@@ -14,16 +14,16 @@ describe('a pointer — repointed, called, set and granted', () => {
       set = (n Integer) { v <- n }
       @a = () -> v
     }
-    held *T = T(1)
-    box *S = S(2)
+    held = *T(1)
+    box = *S(2)
     read = (t T) -> t.a()
-    @local = { c *T = T(4); *c <- U(6, 7); x Integer = c.a(); return x }
-    @localSet = { c *S = S(4); c <- 9; x Integer = c.a(); return x }
+    @local = { c = *T(4); *c <- U(6, 7); x Integer = c.a(); return x }
+    @localSet = { c = *S(4); c <- 9; x Integer = c.a(); return x }
     @state! = { *held <- U(8, 9); x Integer = held.a(); return x }
     @stateSet! = { box <- 11; x Integer = box.a(); return x }
-    @inIf! = (n Integer) { c *S = S(1); if (n > 0) { c <- 12; *held <- T(13) }; x Integer = c.a(); y Integer = held.a(); return x * 100 + y }
-    @pass = { c *T = T(3); x Integer = read(c); return x }
-    @grant! = { c *T = T(3); repoint! = (p *T) { *p <- T(5) }; repoint!(*c); x Integer = c.a(); return x }
+    @inIf! = (n Integer) { c = *S(1); if (n > 0) { c <- 12; *held <- T(13) }; x Integer = c.a(); y Integer = held.a(); return x * 100 + y }
+    @pass = { c = *T(3); x Integer = read(c); return x }
+    @grant! = { c = *T(3); repoint! = (p *T) { *p <- T(5) }; repoint!(*c); x Integer = c.a(); return x }
   `;
 
   it('repointing a local takes a subclass instance, and a call reaches it', async () => {
@@ -92,7 +92,7 @@ describe('a pointer — what it refuses', () => {
 
   it("a bare write sends the actor's set, so a class without one refuses it", () => {
     expect(() => compileSource(`${classes}
-      @f = { c *T = T(1); c <- T(2); return 1 }
+      @f = { c = *T(1); c <- T(2); return 1 }
     `)).toThrow("'c' points to a T, which has no 'set': repoint it with '*c <- …'");
   });
 
@@ -116,7 +116,7 @@ describe('a pointer — what it refuses', () => {
 
   it('a repointing takes one value', () => {
     expect(() => compileSource(`${classes}
-      @f = { c *T = T(1); *c <- 1, 2; return 1 }
+      @f = { c = *T(1); *c <- 1, 2; return 1 }
     `)).toThrow("'*c <- …' repoints a cell, so it takes one value");
   });
 

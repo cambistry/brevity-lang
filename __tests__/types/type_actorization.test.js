@@ -13,7 +13,7 @@ describe('type actorization — *Point state cell', () => {
   const script = `
     type Point(Integer, Integer)
 
-    coords *Point = Point(0, 0)
+    coords = *Point(0, 0)
 
     @get = () -> coords: coords
 

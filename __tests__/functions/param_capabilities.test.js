@@ -54,7 +54,7 @@ describe('param capabilities — *Point write-cap on lambda', () => {
 
     @replace!
       =
-      coords *Point = Point(0, 0)
+      coords = *Point(0, 0)
       reset! = (p *Point) { p <- Point(7, 8) }
       reset!(*coords)
       return :coords
