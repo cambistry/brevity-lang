@@ -16,7 +16,6 @@ kanban/tickets/agent-updates-tickets-through-the-board-s-opre-api.md
 kanban/tickets/make-kanban-speculative-board-bv-compile-and-run.md
 kanban/tickets/type-of-type.md
 kanban/tickets/type-inheritance-inheritance-test.md
-kanban/tickets/an-unannotated-bind-infers-only-literals-and-own-calls.md
 kanban/tickets/over-and-reduce-accept-an-integer-as-the-list.md
 kanban/tickets/parse-errors-carry-no-position.md
 kanban/tickets/invoke-add-trace-when-a-function-or-constructor-returns-a.md
