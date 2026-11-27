@@ -303,12 +303,30 @@ describe('a file cell holding an actor', () => {
       x Integer = w.get()
       return x
     }
+
+    @bare = () -> counter.get
+    @bareBind = {
+      x = counter.get
+      return x
+    }
+    @bareReturn = { return counter.get }
   `;
 
   it('is called by the file', async () => {
     await expectBehavior(script,
       { input: { id: '1', op: 'direct', from: 'c' } },
       { output: reply('1', 5) },
+    );
+  });
+
+  it('is read with no parens: as a reply, a bind, a return', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'bare', from: 'c' } },
+      { output: reply('1', 5) },
+      { input: { id: '2', op: 'bareBind', from: 'c' } },
+      { output: reply('2', 5) },
+      { input: { id: '3', op: 'bareReturn', from: 'c' } },
+      { output: reply('3', 5) },
     );
   });
 

@@ -112,9 +112,44 @@ function checkValueIfReturns(ast) {
   walk(ast.actors, false);
 }
 
+// `c.m` with no parens on a cell that holds an actor reads its member by message, as
+// `c.m()` does: it lowers to that call when `m` is a function of the cell's class.
+// A cell of a value type (`p.x` of a Point) is a field read, and is left alone.
+function lowerCellMemberReads(ast) {
+  const classOf = (t) => {
+    if (!isInstance(t)) return null;
+    const names = ownNames(t);
+    return names?.length === 1 ? ast.actors.find(a => a.name === names[0]) : null;
+  };
+  const cells = new Map();
+  for (const a of ast.actors || []) {
+    for (const v of a.stateVarDecls || []) {
+      const cls = classOf(v.typeNameEnc);
+      cells.set(v.name, cells.has(v.name) && cells.get(v.name) !== cls ? null : cls);
+    }
+  }
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach((x, i) => { walk(x); n[i] = lowered(x); }); return; }
+    for (const k in n) {
+      if (k === 'type' || !n[k] || typeof n[k] !== 'object') continue;
+      walk(n[k]);
+      n[k] = lowered(n[k]);
+    }
+  };
+  const lowered = (n) => {
+    if (n?.type !== 'DotAccessExpr' || n.object?.type !== 'RefRead') return n;
+    const cls = cells.get(n.object.name);
+    if (!cls || !(cls.functions || []).some(f => f.name === '@' + n.property || f.name === n.property)) return n;
+    return { type: 'DotCallExpr', object: n.object, method: n.property, args: [], ...(n.loc && { loc: n.loc }) };
+  };
+  walk(ast.actors);
+}
+
 function validateProgram(ast, options = {}) {
   run.ast = ast;
   checkValueIfReturns(ast);
+  lowerCellMemberReads(ast);
   run.classEncByName = new Map();
   lowerBareCalls(ast);
   spreadObjectReturns(ast);
