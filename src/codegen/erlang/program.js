@@ -1,3 +1,4 @@
+import { inspectableFunctions, fnSignatureForm, fnAddress } from '../fn_signature.js';
 import { isInstance } from '../../type_enc.js';
 import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
@@ -1715,12 +1716,18 @@ ${putLines},
     ...stateVarDecls.map(v => [v.name, v.typeNameEnc]),
     ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))]),
   ]);
-  const testGetClauses = allStateNames.map(n =>
-    `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`,
-  ).join(';\n');
-  const testTypeClauses = allStateNames.map(n =>
-    `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`,
-  ).join(';\n');
+  // A function reads as its address, typed with its signature (src/codegen/fn_signature.js).
+  const fnsSeen = inspectableFunctions(actor);
+  const erlJson = (v) => (v === null ? 'null' : typeof v === 'boolean' ? String(v) : typeof v === 'string' ? erlString(v)
+    : Array.isArray(v) ? `[${v.map(erlJson).join(', ')}]` : `#{${Object.entries(v).map(([k, x]) => `${erlString(k)} => ${erlJson(x)}`).join(', ')}}`);
+  const testGetClauses = [
+    ...allStateNames.map(n => `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`),
+    ...fnsSeen.map(f => `        ${erlString(fnAddress(f))} -> ${erlString(fnAddress(f))}`),
+  ].join(';\n');
+  const testTypeClauses = [
+    ...allStateNames.map(n => `        ${erlOp(n)} -> ${erlString(erlTypeTag(ctx, orAny(stateTypeMap.get(n))))}`),
+    ...fnsSeen.map(f => `        ${erlString(fnAddress(f))} -> ${erlJson(fnSignatureForm(f))}`),
+  ].join(';\n');
   // Build target routing for child actor refs
   const childRefRoutes = [];
   // Each route walks instance pids: the host cell holds the first child's

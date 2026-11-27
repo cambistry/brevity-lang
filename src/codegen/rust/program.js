@@ -1,3 +1,4 @@
+import { inspectableFunctions, fnSignatureForm, fnAddress } from '../fn_signature.js';
 import { markSendOperands } from '../send_operands.js';
 import { hasInterface } from '../../actor_interface.js';
 // The state key of each name an actor answers `$get` for, by class ("" is the
@@ -724,7 +725,18 @@ ${targetClauses}
             }
         }`;
 })()}
-        if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
+${inspectableFunctions(actor).length ? `        // A function reads as its address, typed with its signature (src/codegen/fn_signature.js).
+        if let Some((addr, sig)) = match test.get("get").and_then(|v| v.as_str()).unwrap_or("") {
+${inspectableFunctions(actor).map(f => `            ${JSON.stringify(fnAddress(f))} => Some((${JSON.stringify(fnAddress(f))}, json!(${JSON.stringify(fnSignatureForm(f))}))),`).join('\n')}
+            _ => None,
+        } {
+            let mut resp = Map::new();
+            resp.insert("id".to_string(), json!(id));
+            resp.insert("re".to_string(), json!([addr]));
+            resp.insert("to".to_string(), json!(from));
+            resp.insert("ty".to_string(), json!([sig]));
+            let _ = self.binding.send(Value::Object(resp));
+        } else ` : '        '}if let Some(name) = test.get("get").and_then(|v| v.as_str()) {
             let _key: Option<&str> = match name {
 ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(n))} => Some("${stateKey(n)}"),`).join('\n')}
                 _ => None,

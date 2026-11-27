@@ -1609,6 +1609,8 @@ export function genReBody(ctx, fields, typeEnv, declaredReturnType = undefined, 
   const isList = leadsWithList;
   const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
   const posVal = f => {
+    // A function of ours (`&f`) leaves as its address, as on every target.
+    if (f.expr?.type === 'FnRef' && ctx.actorFnNames.has(f.expr.name)) return JSON.stringify(wireLabel(f.expr.name));
     let raw = f.expr ? genExpr(ctx, f.expr) : (ctx.stateVarNames.has(f.name) ? `this.#${stateKey(f.name)}` : ssaResolve(ctx, f.name));
     const name = f.name || (f.expr?.type === 'Identifier' ? f.expr.name : null);
     // A send to an actor (`return b.get()`) replies with what it answers.

@@ -77,3 +77,35 @@ describe('test.get — by wire label', () => {
     );
   });
 });
+
+// A function reads as what it is as a value, its address (as `&f` replies), typed
+// with its signature, the service document's form.
+describe('test.get — a function', () => {
+  const script = `
+    n *Integer = 0
+    f = (k Integer) -> k * 2
+    bump! = (by Integer) { n <- n + by }
+    @ref = () -> &f
+  `;
+
+  it('reads its address, typed with its signature', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~f' }, from: 't' } },
+      { output: { id: '1', re: ['~f'], ty: [['%f', { args: ['Integer'], re: ['Integer'], writes: false }]], to: 't' } },
+    );
+  });
+
+  it('a function that writes', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~bump!' }, from: 't' } },
+      { output: { id: '1', re: ['~bump!'], ty: [['%f', { args: ['Integer'], re: [], writes: true }]], to: 't' } },
+    );
+  });
+
+  it('is the address replying &f gives', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: 'ref', from: 't' } },
+      { output: expect.objectContaining({ id: '1', re: ['~f'], to: 't' }) },
+    );
+  });
+});
