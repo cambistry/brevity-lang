@@ -927,6 +927,9 @@ function handleTypedAssign_Generic(s, typeEnv, fnDefs, I, lines) {
     val = convertFromValue(val, s.typeNameEnc);
   } else if ((s.value.type === 'StateVar' || s.value.type === 'RefRead' || s.value.type === 'DotAccessExpr') && rustType(s.typeNameEnc) !== 'Value') {
     val = convertFromValue(val, s.typeNameEnc);
+  } else if (s.value.type === 'ListMethodExpr' && /^bv_list_(first|last)\(/.test(val) && rustType(s.typeNameEnc) !== 'Value') {
+    // A list's element (`List.first`, and `List.find`, which is `first` of a filter) is a Value.
+    val = convertFromValue(val, s.typeNameEnc);
   } else if (/^self\.(state|refs)\.get\(/.test(val) && rustType(s.typeNameEnc) !== 'Value') {
     // A name read from state (a class's param) is a Value.
     val = convertFromValue(val, s.typeNameEnc);

@@ -7246,7 +7246,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
             const free = [...namesIn(list.body)].filter(x => !own.has(x) && bound.has(x));
             const name = `__clauses${n++}${writes(list.body) ? '!' : ''}`;
             const params = [
-              ...list.params.map(p => ({ ...p, typeEnc: p.typeEnc ?? 'Anything' })),
+              // An untyped head takes the subject's type, which validation knows (src/validate.js typeSlotLambdas).
+              ...list.params.map(p => (p.typeEnc === undefined ? { ...p, typeEnc: 'Anything', fromSlot: true } : p)),
               ...free.map(x => ({ name: x, positional: true, typeEnc: bound.get(x) })),
             ];
             actor.functions.push(Object.assign(AST.functionDecl(name, params, list.body), list.matchesInput ? { matchesInput: true } : {}));

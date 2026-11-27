@@ -3023,6 +3023,7 @@ function depOfEnc(t, dependencyNames) {
 
 function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDecls, typeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat = new Map(), actorConstructorSigs = new Map(), actorByName = new Map(), actorMethodSigsFlat = new Map(), localFunctionSigs = new Map(), actorNameSet = new Set(), actorSettersFlat = new Map(), inferOnly = false) {
   if (!inferOnly) checkTypeConsistency(body);
+  const slotLambdas = typeSlotLambdas(body, typeEnv, actorByName);
 
   // Build a local map of variable → actor class from assignments like: a = A().
   // Both locally-defined actors (in `actorMethods`) and manifest-declared classes
@@ -3838,6 +3839,72 @@ function validateBody(body, actorInfo, dependencyNames, remotesParsed, factoryDe
       validateBody(s.value.body, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
     }
   }
+
+  // A lambda in a slot (`over`, `reduce`, `List.sort`, `sub`) runs its body with
+  // its params as the slot types them, and the names around it.
+  if (!inferOnly) {
+    for (const { params, body: lambdaBody } of slotLambdas) {
+      const fnTypeEnv = buildTypeEnv(params, lambdaBody, null, dependencyNames);
+      for (const [k, v] of typeEnv) if (!fnTypeEnv.has(k) && !params.some(p => p.name === k)) fnTypeEnv.set(k, v);
+      validateBody(lambdaBody, actorInfo, dependencyNames, remotesParsed, factoryDecls, fnTypeEnv, actorMethods, actorMethodSigs, actorRefRequirements, coercionConstraints, actorMethodsFlat, actorConstructorSigs, actorByName, actorMethodSigsFlat, localFunctionSigs, actorNameSet, actorSettersFlat);
+    }
+  }
+}
+
+// A lambda's params take their types from the slot it's in: each element of the List
+// `over` and `List.sort` go through (`List.map`, `filter` and `find` are `over`); the
+// seed and each element in `reduce`; the value a `sub` delivers from a cell; the
+// subject piped into a clause list. An explicit type the slot can't pass is an
+// error. Sets each untyped param's `typeEnc` in place, read by validation and the
+// code generators. Returns the slot lambdas found, for their bodies' validation.
+function typeSlotLambdas(body, typeEnv, actorByName) {
+  const found = [];
+  const typeOf = (e) => { const t = inferType(e, typeEnv); return t === null || t === 'Anything' ? undefined : t; };
+  const elementOf = (e) => { const t = typeOf(e); return t !== undefined && isList(t) ? listElement(t) : undefined; };
+  const apply = (params, types, what) => {
+    params.forEach((p, i) => {
+      const t = types[i];
+      if (!p || p.rest || t === undefined || t === 'Anything') return;
+      if ((p.typeEnc === undefined && !p.typeUnencoded) || p.fromSlot) { p.typeEnc = t; delete p.fromSlot; return; }
+      if (p.typeEnc !== undefined && canJudgeEnc(p.typeEnc, actorByName) && canJudgeEnc(t, actorByName)
+        && assignableEnc(t, p.typeEnc, actorByName) === false) {
+        const a = (x) => (/^[AEIOU]/.test(x) ? `an ${x}` : `a ${x}`);
+        throw new Error(`${what} passes '${p.name}' ${a(shown(t))}, which isn't ${a(shown(p.typeEnc))}`);
+      }
+    });
+  };
+  const lambdaBody = (fn) => fn.body ?? (fn.expr ? [{ type: 'ImplicitReturn', expr: fn.expr }] : []);
+  // A clause list piped into is lifted to a function of its actor, `__clausesN`
+  // (src/parser.js settleClauseCalls); its own params come first.
+  const clauseFns = new Map();
+  for (const a of run.ast?.actors || []) for (const f of a.functions || []) if (/^__clauses\d+!?$/.test(f.name)) clauseFns.set(f.name, f);
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (n.type === 'Function') return; // its own body: validated with its own scope
+    const lambda = (fn, types, what) => {
+      if (fn?.type !== 'Function') return;
+      apply(fn.params || [], types, what);
+      found.push({ params: fn.params || [], body: lambdaBody(fn) });
+    };
+    if (n.type === 'OverExpr') lambda(n.fn, [elementOf(n.collection)], `'over' of ${shown(typeOf(n.collection))}`);
+    if (n.type === 'SortByExpr') { const e = elementOf(n.list); lambda(n.fn, [e, e], `'List.sort' of ${shown(typeOf(n.list))}`); }
+    if (n.type === 'ReduceExpr') lambda(n.fn, [typeOf(n.initial), elementOf(n.collection)], `'reduce' of ${shown(typeOf(n.collection))}`);
+    if (n.type === 'SubscribeCall' && Array.isArray(n.body) && (n.target?.type === 'RefRead' || n.target?.type === 'Identifier')) {
+      const t = typeEnv.get(n.target.name);
+      if (t !== undefined && !isFn(t)) apply(n.params || [], [t], `'sub ${n.target.name}'`);
+      // A handler's value isn't used: its tail is a statement.
+      const last = n.body[n.body.length - 1];
+      const handler = last?.type === 'ImplicitReturn' ? [...n.body.slice(0, -1), { type: 'ExprStatement', expr: last.expr }] : n.body;
+      found.push({ params: n.params || [], body: handler });
+    }
+    if (n.type === 'FunctionCallExpr' && n.callee?.type === 'Identifier' && clauseFns.has(n.callee.name)) {
+      apply(clauseFns.get(n.callee.name).params || [], n.args.map(a => (a?.type === 'NamedArgsBag' ? undefined : typeOf(a))), 'the clause list');
+    }
+    for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') walk(n[k]);
+  };
+  walk(body);
+  return found;
 }
 
 // ── Type consistency ────────────────────────────────────────────────────────
