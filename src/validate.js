@@ -3864,7 +3864,6 @@ function checkPublishedParams(ast) {
 
 const BLOCK_LABELS = {
   IfBranch: 'an if block',
-  IfStatement: 'an if block',
   WhileStatement: 'a while block',
   CatchExpr: 'a catch block',
 };

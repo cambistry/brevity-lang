@@ -89,7 +89,7 @@ describe('input the parser dropped is an error', () => {
   });
 
   it('`as Type` on an `if` condition', () => {
-    expect(() => compileSource('@f = (b Boolean) {\n  x = if b as Boolean { 1 } else { 2 }\n  return x\n}\n')).toThrow("Unexpected token in expression: KEYWORD 'as'");
+    expect(() => compileSource('@f = (b Boolean) {\n  x = if b as Boolean { 1 } else { 2 }\n  return x\n}\n')).toThrow("An 'if' condition ends at a ')' closing a group that opens it, at a '{', or at the end of the line: 'if (cond) value'");
   });
 
   it('a stray token in `Object(…)`', () => {

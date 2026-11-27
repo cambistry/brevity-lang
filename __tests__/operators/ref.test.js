@@ -33,7 +33,7 @@ describe('ref — runtime', () => {
       @readIf
         =
         a *Integer = 42
-        result Integer = if true a else 0
+        result Integer = if (true) a else 0
         return :result
 
       @readFn

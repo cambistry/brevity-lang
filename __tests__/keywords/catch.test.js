@@ -8,7 +8,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       catch #done {
         x <- 1
-        if true #done
+        if (true) #done
         x <- 99
       }
       return :x
@@ -19,7 +19,7 @@ describe('catch — runtime', () => {
       catch #done {
         repeat while x < 100 {
           x <- x + 1
-          if x == 5 #done
+          if (x == 5) #done
         }
       }
       return :x
@@ -29,7 +29,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       catch #done {
         x <- 7
-        if true #done()
+        if (true) #done()
         x <- 999
       }
       return :x
@@ -51,7 +51,7 @@ describe('catch — runtime', () => {
       catch #outer {
         repeat while x < 10 {
           x <- x + 1
-          if x == 3 #outer
+          if (x == 3) #outer
           repeat while y < 10 {
             y <- y + 1
           }
@@ -63,7 +63,7 @@ describe('catch — runtime', () => {
     @found
       =
       result Integer = catch #f {
-        if true #f(42)
+        if (true) #f(42)
         99
       }
       return :result
@@ -71,7 +71,7 @@ describe('catch — runtime', () => {
     @fallThrough
       =
       result Integer = catch #f {
-        if false #f(1)
+        if (false) #f(1)
         7
       }
       return :result
@@ -82,7 +82,7 @@ describe('catch — runtime', () => {
       result Integer = catch #f {
         repeat while x < 100 {
           x <- x + 1
-          if x == 5 #f(x)
+          if (x == 5) #f(x)
         }
         0
       }
@@ -91,7 +91,7 @@ describe('catch — runtime', () => {
     @directReturn
       =
       catch #f {
-        if true #f(123)
+        if (true) #f(123)
         0
       }
 
@@ -102,7 +102,7 @@ describe('catch — runtime', () => {
       catch #outer {
         catch #inner {
           x <- 1
-          if true #inner
+          if (true) #inner
           x <- 99
         }
         x <- x + 10
@@ -115,7 +115,7 @@ describe('catch — runtime', () => {
       catch #outer {
         catch #inner {
           x <- 1
-          if true #outer
+          if (true) #outer
           x <- 99
         }
         x <- 999
@@ -126,7 +126,7 @@ describe('catch — runtime', () => {
       =
       result Integer = catch #outer {
         catch #inner {
-          if true #outer(7)
+          if (true) #outer(7)
           0
         }
         99
@@ -138,7 +138,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       catch #outer {
         catch #i1 {
-          if true #outer
+          if (true) #outer
         }
         catch #i2 {
           x <- 99
@@ -152,7 +152,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       #loop repeat while x < 100 {
         x <- x + 1
-        if x == 4 #loop
+        if (x == 4) #loop
       }
       return :x
 
@@ -161,7 +161,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       #region {
         x <- 5
-        if true #region
+        if (true) #region
         x <- 999
       }
       return :x
@@ -171,7 +171,7 @@ describe('catch — runtime', () => {
       x *Integer = 0
       #loop repeat while x < 10 {
         x <- x + 1
-        if x == 2 #loop
+        if (x == 2) #loop
       }
       end#loop
       return :x
@@ -179,7 +179,7 @@ describe('catch — runtime', () => {
     @blockValueCarrying
       =
       result Integer = #region {
-        if true #region(42)
+        if (true) #region(42)
         99
       }
       return :result
@@ -193,7 +193,7 @@ describe('catch — runtime', () => {
         y <- 0
         #inner repeat while y < 10 {
           y <- y + 1
-          if x == 3 #outer
+          if (x == 3) #outer
         }
       }
       return :x, :y
@@ -355,8 +355,8 @@ describe('catch — compile errors', () => {
       @t.
         =
         catch #m {
-          if true #m
-          if false #m(1)
+          if (true) #m
+          if (false) #m(1)
           0
         }
         return

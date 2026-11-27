@@ -2449,31 +2449,6 @@ function genRustLocals(body, typeEnv, functionAnalysis, mutableVars, indent, fns
       }
     } else if (s.type === 'ListDestructure') {
       lines.push(genRustListDestructure(s, typeEnv, I));
-    } else if (s.type === 'IfStatement') {
-      const cond = genRustCondition(s.cond, typeEnv);
-      const bodyLines = [];
-      for (const bs of s.body) {
-        if (bs.type === 'SetStatement') {
-          if (sCtx.childActorRefs && sCtx.childActorRefs.has(bs.name)) {
-            const actorName = sCtx.childActorRefs.get(bs.name);
-            const wireOp = bs.updateOp === '<|' ? '$update' : '$set';
-            const val = genRustExpr(bs.value, typeEnv);
-            bodyLines.push(`${I}    self.child_${actorName.toLowerCase()}_dispatch("${wireOp}", &${valueArray([val])}, "", "__parent");`);
-          } else {
-            const val = genRustExpr(bs.value, typeEnv);
-            const t = typeEnv.get(bs.name) || inferLiteralType(bs.value);
-            const bk = G.ctx.stateVarNames.has(bs.name) ? stateKey(bs.name) : bs.name;
-            bodyLines.push(`${I}    ${storeInsert(rsStore(bs.name), bk, forceJsonWrap(toJsonValue(val, t)))}`);
-          }
-        } else if (bs.type === 'StateAssign') {
-          const val = genRustExpr(bs.value, typeEnv);
-          const t = typeEnv.get('$' + bs.name) || inferLiteralType(bs.value);
-          bodyLines.push(`${I}    self.state.insert("${stateKey(bs.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
-        } else if (bs.type === 'ExprStatement') {
-          bodyLines.push(`${I}    ${genRustExpr(bs.expr, typeEnv)};`);
-        }
-      }
-      lines.push(`${I}if ${cond} {\n${bodyLines.join('\n')}\n${I}}`);
     } else if (s.type === 'LaunchStatement') {
       lines.push(`${I}let _ = ${genRustFnCallExpr(s.call, typeEnv)};`);
     } else if (s.type === 'ExprStatement') {
@@ -3270,7 +3245,12 @@ function genRustIfStatementBody(branch, typeEnv, I) {
   const lines = [];
   const stmts = branch.body || (branch.expr ? [{ type: 'ExprStatement', expr: branch.expr }] : []);
   for (const s of stmts) {
-    if (s.type === 'SetStatement') {
+    const childActor = s.type === 'SetStatement' && G.ctx.enclosingLocals?.childActorRefs?.get(s.name);
+    if (childActor) {
+      // A ref holding a child actor: the write is its `$set`.
+      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+      lines.push(`${I}self.child_${childActor.toLowerCase()}_dispatch("${wireOp}", &${valueArray([genRustExpr(s.value, typeEnv)])}, "", "__parent");`);
+    } else if (s.type === 'SetStatement') {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get(s.name) || inferLiteralType(s.value);
       const sk3 = G.ctx.stateVarNames.has(s.name) ? stateKey(s.name) : s.name;

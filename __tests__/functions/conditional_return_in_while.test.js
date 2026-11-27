@@ -26,7 +26,7 @@ describe('conditional return in while — runtime', () => {
       x *Integer = 0
       repeat while x < 100 {
         x <- x + 1
-        if (x > 4) -> "early-sl"
+        if (x > 4) return "early-sl"
       }
       return "fallthrough"
 
@@ -64,7 +64,7 @@ describe('conditional return in while — runtime', () => {
       x *Integer = 0
       repeat until x >= 100 {
         x <- x + 1
-        if (x > 6) -> "sl-early"
+        if (x > 6) return "sl-early"
       }
       return "fallthrough"
 
@@ -89,7 +89,7 @@ describe('conditional return in while — runtime', () => {
         x *Integer = 0
         repeat while x < limit {
           x <- x + 1
-          if (x > 3) -> "found"
+          if (x > 3) return "found"
         }
         return "none"
       }

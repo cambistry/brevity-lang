@@ -353,7 +353,7 @@ describe('conditional return — lineal functions', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Single-line form — if (cond) -> val  /  else -> val  (no curly braces)
+// Single-line form — if (cond) return val  /  else return val  (no curly braces)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('conditional return — single-line form (no curly braces)', () => {
@@ -361,7 +361,7 @@ describe('conditional return — single-line form (no curly braces)', () => {
     @lambdaGuard
       =
       fn = (a Integer) {
-        if (a > 10) -> "big"
+        if (a > 10) return "big"
         return "small"
       }
       big Text = fn(100)
@@ -371,8 +371,8 @@ describe('conditional return — single-line form (no curly braces)', () => {
     @lambdaIfElse
       =
       fn = (a Integer) {
-        if (a > 0) -> "positive"
-        else -> "non-positive"
+        if (a > 0) return "positive"
+        else return "non-positive"
       }
       pos Text = fn(5)
       neg Text = fn(0 - 5)
@@ -402,15 +402,15 @@ describe('conditional return — single-line form (no curly braces)', () => {
       =
       a Integer
       =
-      if (a > 10) -> "big"
+      if (a > 10) return "big"
       return "small"
 
     singleLineElse
       =
       a Integer
       =
-      if (a > 0) -> "positive"
-      else -> "non-positive"
+      if (a > 0) return "positive"
+      else return "non-positive"
   `;
 
   it('lambda: guard — condition true → early return', async () => {

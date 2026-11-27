@@ -1564,6 +1564,8 @@ function genRustCondition(expr, typeEnv, eCtx) {
   }
   if (expr.type === 'IntLiteral' || expr.type === 'FloatLiteral' || expr.type === 'StringLiteral') return 'true';
   if (expr.type === 'NullLiteral') return 'false';
+  // A number or text is never false or null: truthy, once evaluated.
+  if (['Integer', 'Float', 'Decimal', 'Text'].includes(inferType(expr, typeEnv))) return `{ let _ = ${raw}; true }`;
   return raw;
 }
 

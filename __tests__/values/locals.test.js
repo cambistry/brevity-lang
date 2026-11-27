@@ -65,7 +65,7 @@ describe('locals — runtime', () => {
       @ifRead
         =
         x Integer = 42
-        result Integer = if true x else 0
+        result Integer = if (true) x else 0
         return :result
 
     // locals — nested lambda

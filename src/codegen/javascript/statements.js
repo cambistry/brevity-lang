@@ -490,9 +490,7 @@ function genIfBlockStatements(ctx, body, tmpVar, _outerEnv) {
       code += `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
     } else if (s.type === 'SetStatement') {
       lastTypedName = null;
-      code += ctx.stateVarNames.has(s.name)
-        ? `\n        this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`
-        : `\n        ${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
+      code += genSetStatement(ctx, s, '        ');
     } else if (s.type === 'RefDecl') {
       lastTypedName = null;
       const rhs = s.value ? genExpr(ctx, s.value) : 'undefined';
@@ -825,7 +823,7 @@ export function genLocals(ctx, body, outerEnv) {
     if (s.type === 'TypedAssign' && ctx.actorNames.has(classNameOf(s.typeNameEnc)))
       ctx.childActorVars.set(s.name, false);
   }
-  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'IfStatement' || s.type === 'ExprStatement' || s.type === 'LaunchStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
+  const stmts = body.filter(s => s.type === 'Assign' || s.type === 'DestructureAssign' || s.type === 'TypedAssign' || s.type === 'ListDestructure' || s.type === 'StateAssign' || s.type === 'WhileStatement' || s.type === 'RefDecl' || s.type === 'SetStatement' || s.type === 'ActorSetStatement' || s.type === 'ActorFieldSet' || s.type === 'ExprStatement' || s.type === 'LaunchStatement' || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && hasBlockBodies(s.expr)) || (s.type === 'ImplicitReturn' && (s.expr?.type === 'CatchExpr' || s.expr?.type === 'LabelInvoke')) || (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr' && ifContainsLabelExit(s.expr)));
   const result = stmts.map(s => {
     // Value-carrying catch on RHS of (Typed)Assign — emit hoisted local first.
     if ((s.type === 'Assign' || s.type === 'TypedAssign') && s.value?.type === 'CatchExpr' && !s.value.isVoid) {
@@ -929,24 +927,6 @@ export function genLocals(ctx, body, outerEnv) {
         payload = `[${pos.join(', ')}]`;
       }
       return `\n        ${target}.receive({ op: [${payload}, "${wireOp}"], from: '__parent' });`;
-    }
-    if (s.type === 'IfStatement') {
-      const condCode = genExpr(ctx, s.cond);
-      const truthy = `(${condCode}) !== false && (${condCode}) !== null`;
-      let code = `\n        if (${truthy}) {`;
-      for (const stmt of s.body) {
-        if (stmt.type === 'SetStatement') {
-          const stmtResolved = ctx.ssaScope?.get(stmt.name) || jsIdent(stmt.name);
-          if (ctx.childActorVars.has(stmt.name)) {
-            const wireOp = stmt.updateOp === '<|' ? '$update' : '$set';
-            code += `\n          ${stmtResolved}.value.receive({ op: [[${genExpr(ctx, stmt.value)}], "${wireOp}"], from: '__parent' });`;
-          } else {
-            code += `\n          ${stmtResolved}.value = ${genExpr(ctx, stmt.value)};`;
-          }
-        }
-      }
-      code += `\n        }`;
-      return code;
     }
     if (s.type === 'ImplicitReturn' && s.expr?.type === 'IfExpr') {
       const tmpVar = `_if${counters.ifIdx++}`;
@@ -1166,6 +1146,16 @@ function bodyStmtHasLabelExit(s) {
   return false;
 }
 
+// A write to a cell, a local ref, or a child actor held in a ref (which takes `$set`).
+function genSetStatement(ctx, s, indent) {
+  if (ctx.childActorVars?.has(s.name)) {
+    const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+    return `\n${indent}${jsIdent(s.name)}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
+  }
+  if (ctx.stateVarNames.has(s.name)) return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
+  return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
+}
+
 function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   const isLast = !!opts.isLast;
   // Statement-level label invocation → break (with optional value assignment).
@@ -1208,16 +1198,7 @@ function genCatchBodyStmt(ctx, s, indent, outerEnv, counters, opts = {}) {
   if (s.type === 'StateAssign') {
     return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
   }
-  if (s.type === 'SetStatement') {
-    if (ctx.childActorVars?.has(s.name)) {
-      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-      return `\n${indent}${s.name}.value.receive({ op: [[${genExpr(ctx, s.value)}], "${wireOp}"], from: '__parent' });`;
-    }
-    if (ctx.stateVarNames.has(s.name)) {
-      return `\n${indent}this.#${stateKey(s.name)} = ${genExpr(ctx, s.value)};`;
-    }
-    return `\n${indent}${jsIdent(s.name)}.value = ${genExpr(ctx, s.value)};`;
-  }
+  if (s.type === 'SetStatement') return genSetStatement(ctx, s, indent);
   if (s.type === 'Return') {
     return `\n${indent}return ${genPackedReturn(ctx, s.fields, ctx.currentTypeEnv)};`;
   }

@@ -93,8 +93,6 @@ export const actorFieldSet = (objectName, fieldName, value, { updateOp = undefin
 
 export const selfValue = () => ({ type: 'SelfValue' });
 
-export const ifStatement = (cond, body) =>
-  ({ type: 'IfStatement', cond, body });
 
 export const whileStatement = (cond, body, negated) =>
   ({ type: 'WhileStatement', cond, body, negated });

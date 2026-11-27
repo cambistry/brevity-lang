@@ -3,60 +3,60 @@ import { expectBehavior, compileSource } from '../helpers.js';
 describe('if — runtime', () => {
   const script = `
     // Boolean literals
-      @boolTrue = { result Integer = if true 1 else 0; return :result }
-      @boolFalse = { result Integer = if false 1 else 0; return :result }
+      @boolTrue = { result Integer = if (true) 1 else 0; return :result }
+      @boolFalse = { result Integer = if (false) 1 else 0; return :result }
       @nullFalsy
         =
         cond Integer | null = null
-        result Integer = if cond 1 else 0
+        result Integer = if (cond) 1 else 0
         return :result
       @zeroTruthy
         =
-        result Integer = if 0 1 else 99
+        result Integer = if (0) 1 else 99
         return :result
 
     // Comparison operators
       @eqTrue
         =
         x Integer = 5
-        result Integer = if x == 5 1 else 0
+        result Integer = if (x == 5) 1 else 0
         return :result
 
       @neqTrue
         =
         x Integer = 5
-        result Integer = if x != 3 1 else 0
+        result Integer = if (x != 3) 1 else 0
         return :result
 
       @gtTrue
         =
         x Integer = 10
-        result Integer = if x > 5 1 else 0
+        result Integer = if (x > 5) 1 else 0
         return :result
 
       @ltTrue
         =
         x Integer = 3
-        result Integer = if x < 5 1 else 0
+        result Integer = if (x < 5) 1 else 0
         return :result
 
       @gteTrue
         =
         x Integer = 5
-        result Integer = if x >= 5 1 else 0
+        result Integer = if (x >= 5) 1 else 0
         return :result
 
       @lteTrue
         =
         x Integer = 5
-        result Integer = if x <= 5 1 else 0
+        result Integer = if (x <= 5) 1 else 0
         return :result
 
     // if/else expression
       @singleLine
         =
         cond Boolean = true
-        x Integer = if cond 10 else 20
+        x Integer = if (cond) 10 else 20
         return result: x
 
       @blockForm
@@ -72,7 +72,7 @@ describe('if — runtime', () => {
       @elseIf
         =
         x Integer = 2
-        result Integer = if x == 1 10 else if x == 2 20 else 30
+        result Integer = if (x == 1) 10 else if (x == 2) 20 else 30
         return :result
 
       @newName
@@ -98,12 +98,12 @@ describe('if — runtime', () => {
     // if without else + function call
       @noElseFalse
         =
-        result Integer | null = if false 42
+        result Integer | null = if (false) 42
         return :result
 
       @noElseTrue
         =
-        result Integer | null = if true 42
+        result Integer | null = if (true) 42
         return :result
 
       // A braced body's tail is its value: an \`if\` there too.
@@ -1544,7 +1544,7 @@ describe('if — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        result Integer = if true 42 as Integer
+        result Integer = if (true) 42 as Integer
         return :result
     `)).toThrow(/if without else can return null/i);
   });
@@ -1553,8 +1553,124 @@ describe('if — compile errors', () => {
     expect(() => compileSource(`
       @test
         =
-        result Integer = if true 1 as Integer else "text" as Text
+        result Integer = if (true) 1 as Integer else "text" as Text
         return :result
     `)).toThrow(/branch type mismatch/i);
+  });
+});
+
+// An `if`'s condition ends at a `)` closing a group that opens it, at a `{`, or at the
+// end of the line. Nothing else ends it.
+describe('if — where the condition ends', () => {
+  const parenRule = "An 'if' condition ends at a ')' closing a group that opens it, at a '{', or at the end of the line: 'if (cond) value'";
+
+  it('a value on the same line doesn\'t end it', () => {
+    expect(() => compileSource(`
+      @f = (row Integer, last Integer) {
+        x Integer = if row == last 0 else row + 1
+        return x
+      }
+    `)).toThrow(parenRule);
+  });
+
+  it('`return` doesn\'t end it', () => {
+    expect(() => compileSource(`
+      @f = (a Integer) {
+        if a > 10 return "big"
+        return "small"
+      }
+    `)).toThrow(parenRule);
+  });
+
+  it('a write on the same line doesn\'t end it, even after one name', () => {
+    expect(() => compileSource(`
+      n *Integer = 0
+      @f! = (b Boolean) {
+        if b n <- 1
+        return n
+      }
+    `)).toThrow(parenRule);
+  });
+
+  it('a label exit doesn\'t end it', () => {
+    expect(() => compileSource(`
+      @f = {
+        catch #done {
+          if true #done
+        }
+        return 1
+      }
+    `)).toThrow(parenRule);
+  });
+
+  it('a group that opens it ends it', () => {
+    expect(() => compileSource(`
+      @f = (a Integer, b Integer, c Integer) {
+        x Integer = if (a + b) * 2 > c 1 else 0
+        return x
+      }
+    `)).toThrow();
+  });
+});
+
+describe('if — parens around the condition', () => {
+  const script = `
+    @inline = (a Integer, b Integer) {
+      x Integer = if (a + b) 1 else 0
+      y Integer = if (a > b) (a - b) else (b - a)
+      return (x, y)
+    }
+    @block = (a Integer, b Integer) {
+      x Integer = if (a + b) * 2 > 10 { 1 } else { 0 }
+      y Integer = if a > b { 1 } else { 0 }
+      return (x, y)
+    }
+    n *Integer = 0
+    @nextLine! = (a Integer) {
+      if a > 10
+        n <- 1
+      if (a > 20)
+        n <- 2
+      return n
+    }
+    @early = (a Integer) {
+      if (a > 10) return "big"
+      if (a > 0) return "positive"
+      else return "non-positive"
+    }
+  `;
+
+  it('an inline condition in parens; the group ends it, so a paren value follows', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[2, 5], 'inline'], ty: [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', re: [1, 3], ty: ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('a `{` ends it: parens or not, and a group can open a longer condition', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[4, 2], 'block'], ty: [['Integer', 'Integer']], from: 'c' } },
+      { output: { id: '1', re: [1, 1], ty: ['Integer', 'Integer'], to: 'c' } },
+    );
+  });
+
+  it('a branch on the next line: the line break ends the condition, parens or not', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[15], 'nextLine!'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: [1], ty: ['Integer'], to: 'c' } },
+      { input: { id: '2', op: [[25], 'nextLine!'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: [2], ty: ['Integer'], to: 'c' } },
+    );
+  });
+
+  it('an early return: if (c) return v, else return v', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', op: [[11], 'early'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '1', re: ['big'], ty: ['Text'], to: 'c' } },
+      { input: { id: '2', op: [[3], 'early'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '2', re: ['positive'], ty: ['Text'], to: 'c' } },
+      { input: { id: '3', op: [[0], 'early'], ty: [['Integer']], from: 'c' } },
+      { output: { id: '3', re: ['non-positive'], ty: ['Text'], to: 'c' } },
+    );
   });
 });

@@ -1517,14 +1517,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       }
       if (peek().type === 'KEYWORD' && peek().value === 'if') {
         take(); // 'if'
-        const _prevBare = bareFuncAllowed;
-        bareFuncAllowed = false;
-        const cond = parseExpr();
-        bareFuncAllowed = _prevBare;
-        skipNewlines();
+        const cond = parseIfCond({ skipLines: true });
         const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
-        if (peek().type !== 'LBRACE' && peek().type !== '->' && !isLabelExit) {
-          throw new Error(`Expected '{', '->', or label exit after if condition in while body`);
+        if (peek().type !== 'LBRACE' && !isReturnKw() && !isLabelExit) {
+          throw new Error(`Expected '{', 'return', or label exit after if condition in while body`);
         }
         const thenBranch = parseIfBranch();
         let elseBranch = null;
@@ -2040,8 +2036,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       expect('RBRACE');
       return AST.ifBranch({ body });
     }
-    if (peek().type === '->') {
-      take(); // ->
+    if (isReturnKw()) {
+      take(); // return
       return AST.ifBranch({ body: [AST.returnNode(parseReplyFields(true))] });
     }
     const expr = parseExpr();
@@ -2058,11 +2054,34 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return AST.ifBranch({ expr, typeName });
   }
 
-  function parseIfExpr() {
+  // An `if`'s condition ends at a `)` closing a group that opens it, at a `{`, or at
+  // the end of the line: `if (c) v`, `if c { v }`. Nothing else ends it, and the
+  // group ends it there: `if (a + b) * 2 > c x` fails at `*`.
+  function parseIfCond({ skipLines = false } = {}) {
+    const start = pos;
     const _prevBare = bareFuncAllowed;
     bareFuncAllowed = false;
-    const cond = parseExpr();
-    bareFuncAllowed = _prevBare;
+    try {
+      const cond = parseExpr();
+      const lineEnds = skipLines && peek().type === 'NEWLINE';
+      if (skipLines) skipNewlines();
+      if (peek().type === 'LBRACE' || lineEnds) return cond;
+      if (tokens[start]?.type !== 'LPAREN') throw new Error("An 'if' condition ends at a ')' closing a group that opens it, at a '{', or at the end of the line: 'if (cond) value'");
+      pos = start;
+      take(); // (
+      skipNewlines();
+      const group = parseExpr();
+      skipNewlines();
+      expect('RPAREN');
+      if (skipLines) skipNewlines();
+      return group;
+    } finally {
+      bareFuncAllowed = _prevBare;
+    }
+  }
+
+  function parseIfExpr() {
+    const cond = parseIfCond();
     const thenBranch = parseIfBranch();
     skipNewlines();
     let elseBranch = null;
@@ -4001,14 +4020,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         body.push(AST.exprStatement(AST.labelInvoke(labelName, valueExpr)));
       } else if (peek().type === 'KEYWORD' && peek().value === 'if') {
         take(); // 'if'
-        const _prevBare = bareFuncAllowed;
-        bareFuncAllowed = false;
-        const cond = parseExpr();
-        bareFuncAllowed = _prevBare;
-        skipNewlines();
+        const cond = parseIfCond({ skipLines: true });
         const isLabelExit = peek().type === 'HASH_IDENT' && labelStack.includes('#' + peek().value);
-        if (peek().type === 'LBRACE' || peek().type === '->' || isLabelExit) {
-          // Block-body, single-line `-> val`, or single-line `#label` (label exit).
+        if (peek().type === 'LBRACE' || isReturnKw() || isLabelExit) {
+          // Block-body, single-line `return val`, or single-line `#label` (label exit).
           const thenBranch = parseIfBranch();
           let elseBranch = null;
           skipNewlines();
@@ -4041,7 +4056,8 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
               break;
             }
           }
-          body.push(AST.ifStatement(cond, ifBody));
+          // The same `if` as `if c { n <- v }`, written on one line.
+          body.push(AST.implicitReturn(AST.ifExpr(cond, AST.ifBranch({ body: ifBody }), null)));
         }
       } else if (
         (peek().type === 'IDENT' && (tokens[pos + 1]?.type === 'LPAREN' || tokens[pos + 1]?.type === 'DOT' || tokens[pos + 1]?.type === 'ELLIPSIS')) ||
@@ -6563,6 +6579,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
   settleSilentDecls(result);
   settleBangDecls(result);
   settleWrites(result);
+  settleStatementIfs(result);
   captureReturnedCells(result);
   settleFireAndForget(result);
   return result;
@@ -6776,24 +6793,26 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (node.type === 'BinaryExpr' && node.op === '??' && hasWrite(node.right)) {
         throw new Error("'<-' can't be used as a value on the right of '??', which may not run");
       }
-      // A one-line branch of an `if` used as a value (`if c -> a <- 1 else -> 0`)
-      // holds its value as a lone `return`. With the write ahead of it, it takes
-      // the braced form: the write, then the value.
+      // A one-line branch of an `if` used as a value (`if (c) (a <- 1) else 0`)
+      // holds its value as an expression. With the write ahead of it, it takes the
+      // braced form: the write, then the value.
       // Every one-line branch then takes that form, since an `if` gives a value when
       // its branches agree.
       if (node.type === 'IfExpr' && node !== statementIf) {
         const lone = (branch) => {
+          if (branch?.expr) return branch.expr;
           const only = branch?.body?.length === 1 ? branch.body[0] : null;
-          return only?.type === 'Return' && only.fields?.length === 1 ? only : null;
+          return only?.type === 'Return' && only.fields?.length === 1 ? only.fields[0].expr : null;
         };
         const branches = [];
         for (let b = node; b; b = b.else?.type === 'IfExpr' ? b.else : null) branches.push(b.then, ...(b.else?.type === 'IfExpr' ? [] : [b.else]));
-        if (branches.some(b => lone(b) && hasWrite(lone(b).fields[0].expr))) {
+        if (branches.some(b => hasWrite(lone(b)))) {
           for (const branch of branches) {
-            const only = lone(branch);
-            if (!only) continue;
+            const expr = lone(branch);
+            if (!expr) continue;
             const branchSets = [];
-            const value = hoist(only.fields[0].expr, branchSets);
+            const value = hoist(expr, branchSets);
+            delete branch.expr;
             branch.body = [...branchSets, AST.implicitReturn(value)];
           }
         }
@@ -6827,6 +6846,29 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (Array.isArray(node)) { node.forEach(visit); return; }
       for (const [k, v] of Object.entries(node)) {
         if ((k === 'body' || k === 'initBody') && Array.isArray(v)) settleList(v);
+        if (v && typeof v === 'object') visit(v);
+      }
+    };
+    visit(program.actors);
+  }
+
+  // An `if` with statements after it, whose branches never leave (no `return`, label
+  // exit or silent end), is a statement: it runs for its branches' effects, in place.
+  // One that leaves is a guard, and a tail one is the body's value.
+  function settleStatementIfs(program) {
+    const leaves = (node) => !!node && typeof node === 'object' && node.type !== 'Function'
+      && (['Return', 'Reply', 'SilentTerminator', 'LabelInvoke'].includes(node.type)
+        || Object.entries(node).some(([k, v]) => k !== 'loc' && v && typeof v === 'object' && leaves(v)));
+    const visit = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(visit); return; }
+      for (const [k, v] of Object.entries(node)) {
+        if ((k === 'body' || k === 'initBody') && Array.isArray(v)) {
+          for (let i = 0; i < v.length - 1; i++) {
+            const st = v[i];
+            if (st?.type === 'ImplicitReturn' && st.expr?.type === 'IfExpr' && !leaves(st.expr)) v[i] = { ...st, type: 'ExprStatement' };
+          }
+        }
         if (v && typeof v === 'object') visit(v);
       }
     };

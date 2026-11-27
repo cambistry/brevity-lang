@@ -332,13 +332,13 @@ export function lowerSuperCalls(actors, chain) {
       if (path.some(p => LOOPS.has(p.type) || isFunctionNode(p))) {
         throw new Error(`'${written}' in '${U.name}' runs once: it can't be in a loop or a function`);
       }
-      const ifs = path.filter(p => p.type === 'IfExpr' || p.type === 'IfStatement');
+      const ifs = path.filter(p => p.type === 'IfExpr');
       if (ifs.length) {
         const top = ifs[0];
         const callsIn = (b) => { let found = false; walk(b, (m) => { if (m.type === 'SuperCall' && m.layer === n.layer) found = true; }); return found; };
         const branches = [];
-        for (let b = top; b; b = (b.else?.type === 'IfExpr' || b.else?.type === 'IfStatement') ? b.else : null) {
-          branches.push(b.then ?? b.thenBranch, (b.else?.type === 'IfExpr' || b.else?.type === 'IfStatement') ? undefined : (b.else ?? null));
+        for (let b = top; b; b = b.else?.type === 'IfExpr' ? b.else : null) {
+          branches.push(b.then, b.else?.type === 'IfExpr' ? undefined : (b.else ?? null));
         }
         if (branches.filter(b => b !== undefined).some(b => !b || !callsIn(b))) {
           throw new Error(`'${written}' in '${U.name}' is called on one branch of an 'if': an 'if' whose branch calls 'super' needs an 'else' that calls it too`);
@@ -399,7 +399,7 @@ export function lowerSuperCalls(actors, chain) {
       // Called on an 'if''s branches, the base is built on each, at the call: what
       // runs before it is the lines above the 'if', its conditions, and the
       // branch's own lines above the call.
-      const ifsOf = (c) => c.path.filter(p => p.type === 'IfExpr' || p.type === 'IfStatement');
+      const ifsOf = (c) => c.path.filter(p => p.type === 'IfExpr');
       const before = branched.length
         ? [...init.slice(0, at), ...ifsOf(branched[0]).flatMap(f => { const cs = []; for (let b = f; b; b = b.else?.type === 'IfExpr' ? b.else : null) cs.push(b.cond); return cs; }),
           ...branched.flatMap(c => { const body = c.branch.body; const k = body.findIndex(st => st.expr === c.n); return [...body.slice(0, k), c.n.args]; })]

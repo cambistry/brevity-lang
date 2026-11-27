@@ -899,9 +899,6 @@ function genLocals(ctx, body, typeEnv, sCtx, indent) {
       // Type annotation only — no Erlang code needed
     }
 
-    if (s.type === 'IfStatement') {
-      lines.push(genIfStatement(ctx, s, typeEnv, stmtCtx, I));
-    }
   }
 
   ctx._lambdaStartIdx = savedLambdaStartIdx;
@@ -1197,30 +1194,6 @@ function genWhileStatement(ctx, node, typeEnv, sCtx, indent) {
     `${I}    end\n` +
     `${I}end,\n` +
     `${I}${loopName}(),`;
-}
-
-function genIfStatement(ctx, node, typeEnv, sCtx, indent) {
-  const I = indent;
-  const cond = genExpr(ctx, node.cond, typeEnv, sCtx);
-  const bodyLines = [];
-  for (const s of node.body) {
-    if (s.type === 'SetStatement') {
-      if (sCtx?.childActorRefs?.has(s.name)) {
-        const actorName = sCtx.childActorRefs.get(s.name);
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        bodyLines.push(`child_${actorName.toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genExpr(ctx, s.value, typeEnv, sCtx)}], _Id, _From)`);
-      } else if (sCtx?.selfSpawnedRefs?.has(s.name)) {
-        const wireOp = s.updateOp === '<|' ? '$update' : '$set';
-        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
-        bodyLines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genExpr(ctx, s.value, typeEnv, sCtx)}])`);
-      } else {
-        bodyLines.push(`put(${erlSetTarget(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
-      }
-    } else if (s.type === 'StateAssign') {
-      bodyLines.push(`put(${erlStateKey(ctx, s.name)}, ${genExpr(ctx, s.value, typeEnv, sCtx)})`);
-    }
-  }
-  return `${I}case is_truthy(${cond}) of true -> ${bodyLines.join(', ')}; false -> null end,`;
 }
 
 function genListDestructure(ctx, s, typeEnv, sCtx, ssaEnv, I, lines, stmtIdx) {
@@ -1661,7 +1634,6 @@ export {
   genLocals,
   genParamDestructure,
   genWhileStatement,
-  genIfStatement,
   genListDestructure,
   genDestructureAssign,
   findErlAsClauseMatch,

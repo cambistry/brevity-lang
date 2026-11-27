@@ -1541,21 +1541,6 @@ function genFunctionLiteral(ctx, expr, typeEnv, sCtx, selfName, outerRenames) {
         if (s.type === 'ExprStatement') {
           lines.push(genInnerExpr(s.expr));
         }
-        if (s.type === 'IfStatement') {
-          const ifLines = [];
-          for (const bs of s.body) {
-            if (bs.type === 'SetStatement') {
-              if (refParams.has(bs.name)) {
-                ifLines.push(`put(${innerVarName(bs.name)}, ${genInnerExpr(bs.value)})`);
-              } else {
-                ifLines.push(`put(${erlSetTarget(ctx, bs.name)}, ${genInnerExpr(bs.value)})`);
-              }
-            } else if (bs.type === 'StateAssign') {
-              ifLines.push(`put(${erlStateKey(ctx, bs.name)}, ${genInnerExpr(bs.value)})`);
-            }
-          }
-          lines.push(`case is_truthy(${genInnerExpr(s.cond)}) of true -> ${ifLines.join(', ')}; false -> null end`);
-        }
       }
       if (expr.returnType === '.') {
         // No-return function: just execute side effects, return ok
@@ -1873,7 +1858,16 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       continue;
     }
     if (s.type === 'SetStatement') {
-      lines.push(`put(${erlSetTarget(ctx, s.name)}, ${genInner(s.value)})`);
+      // A ref holding a child actor, or an instance it spawned: the write is its `$set`.
+      const wireOp = s.updateOp === '<|' ? '$update' : '$set';
+      if (sCtx?.childActorRefs?.has(s.name)) {
+        lines.push(`child_${sCtx.childActorRefs.get(s.name).toLowerCase()}_handle_op(<<"${wireOp}">>, #{}, [${genInner(s.value)}], _Id, _From)`);
+      } else if (sCtx?.selfSpawnedRefs?.has(s.name)) {
+        const pid = genExpr(ctx, { type: sCtx.refVars?.has(s.name) ? 'RefRead' : 'Identifier', name: s.name }, typeEnv, sCtx);
+        lines.push(`bv_inst_call_(${pid}, <<"${wireOp}">>, [${genInner(s.value)}])`);
+      } else {
+        lines.push(`put(${erlSetTarget(ctx, s.name)}, ${genInner(s.value)})`);
+      }
       lastAssignVar = null;
       continue;
     }

@@ -98,7 +98,7 @@ describe('! functions — runtime', () => {
       return c <- 7
     }
     @branch! = (c Boolean) {
-      x Integer = if c -> a <- 8 else -> 0
+      x Integer = if (c) a <- 8 else 0
       return (x, a)
     }
 
