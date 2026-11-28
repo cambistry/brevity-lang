@@ -1,4 +1,3 @@
-kanban/tickets/file-of-c-binds-a-typed-address.md
 kanban/tickets/file-should-be-a-host-actor.md
 kanban/tickets/a-method-call-on-a-list-compiles-to-a-send.md
 kanban/tickets/a-reply-of-an-own-function-call-is-untyped.md
