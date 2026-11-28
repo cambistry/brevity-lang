@@ -4,8 +4,10 @@
 // as a worktree at .kanban/, one repo-relative ticket path per line.
 // Open tickets are in kanban/tickets/; review, done and won't-do ones in
 // kanban/finished/; a drop moves the file to its column's folder.
-// Each finished move commits and pushes lists/; while open, the board polls
-// origin and rebases onto other stations' moves.
+// Each change to the order (a drop, a new or deleted ticket) is applied to the
+// lists as they are after rebasing onto origin and re-reading lists/, then
+// committed and pushed; so a move made elsewhere since the last read survives.
+// While open, the board also polls origin and rebases onto other stations' moves.
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -212,6 +214,16 @@ function selected() {
   return c ? S.tickets.get(members(c.slug)[currentRow()]) : undefined;
 }
 
+// Put `slug` in `colSlug` after `prev`, else before `next`, else at `row`: where it
+// was dropped, among lists that may hold other moves since.
+function placeNear(slug, colSlug, { prev, next, row }) {
+  const list = members(colSlug).filter(s => s !== slug);
+  const i = prev !== undefined && list.includes(prev) ? list.indexOf(prev) + 1
+    : next !== undefined && list.includes(next) ? list.indexOf(next)
+    : row;
+  place(slug, colSlug, i);
+}
+
 // Put `slug` at position `row` among the members of column `colSlug`.
 function place(slug, colSlug, row) {
   for (const [status, list] of S.lists) S.lists.set(status, list.filter(s => s !== slug));
@@ -293,19 +305,20 @@ function grabOrDrop() {
   }
   const t = S.tickets.get(S.grab.slug);
   const col = t.status;
-  const row = members(col).indexOf(t.slug);
+  const list = members(col);
+  const row = list.indexOf(t.slug);
+  // Where it lands, by its neighbours: the lists it lands in may have changed by the time it's written.
+  const at = { prev: list[row - 1], next: list[row + 1], row };
   fileTicket(t, col);
   S.grab = null;
-  if (S.stale) {
-    // Lists changed on disk during the move: reload them, then re-apply only this move.
-    S.stale = false;
-    reload();
-    S.tickets.get(t.slug).status = col;
-    place(t.slug, col, row);
+  S.stale = false;
+  change(() => {
+    const moved = S.tickets.get(t.slug);
+    if (!moved) return;
+    moved.status = col;
+    placeNear(t.slug, col, at);
     focusSlug(t.slug);
-  }
-  writeOrder();
-  publish();
+  });
 }
 
 function cancelGrab() {
@@ -342,10 +355,15 @@ function newTicket(title) {
   // Only the new ticket: a full loadTickets() would reset every ticket's status to its folder's default.
   S.tickets.set(slug, { ...parseTicket(slug, text, folderOf(status)), status });
   place(slug, status, 0);
-  writeOrder();
-  publish();
   focusSlug(slug);
   S.message = `created ${slug}.md`;
+  change(() => {
+    const t = S.tickets.get(slug);
+    if (!t) return;
+    t.status = status;
+    place(slug, status, 0);
+    focusSlug(slug);
+  });
 }
 
 // Removes the ticket file and its list entry; the quick-view moves to the
@@ -356,8 +374,10 @@ function deleteTicket(slug) {
   fs.rmSync(t.file, { force: true });
   S.tickets.delete(slug);
   for (const [status, list] of S.lists) S.lists.set(status, list.filter(s => s !== slug));
-  writeOrder();
-  publish();
+  change(() => {
+    S.tickets.delete(slug);
+    for (const [status, list] of S.lists) S.lists.set(status, list.filter(s => s !== slug));
+  });
   const next = selected();
   S.peek = S.peek && next ? { slug: next.slug, top: 0 } : null;
   S.message = `deleted ${slug}.md`;
@@ -688,14 +708,22 @@ function absorb(moved) {
   if (t) focusSlug(t.slug);
 }
 
-function publish() {
+// A change to the order: rebase onto origin, re-read lists/ (which also holds
+// moves other sessions committed here), apply `apply` to those lists, then write,
+// commit and push. The board's own lists are never written over newer ones.
+function change(apply) {
   return enqueue(async () => {
+    await integrate();
+    const t = selected();
+    reload();
+    if (t) focusSlug(t.slug);
+    apply();
+    writeOrder();
     const committed = await commitLists();
-    if (!(await origin())) return;
-    const moved = await integrate();
-    const ahead = await git('rev-list', '--count', `origin/${BRANCH}..HEAD`).catch(() => '1');
-    if (ahead !== '0') await git('push', '-q', '-u', 'origin', BRANCH);
-    absorb(moved);
+    if (await origin()) {
+      const ahead = await git('rev-list', '--count', `origin/${BRANCH}..HEAD`).catch(() => '1');
+      if (ahead !== '0') await git('push', '-q', '-u', 'origin', BRANCH);
+    }
     if (committed) S.message = 'order pushed';
     draw();
   });
@@ -704,8 +732,7 @@ function publish() {
 // Tickets no list holds go on record at the top of their column.
 function adopt(unlisted) {
   if (!unlisted.length) return;
-  writeOrder();
-  publish();
+  change(() => {}); // reload lists them at the top of their column
   S.message = unlisted.length === 1 ? `found ${unlisted[0]}.md` : `found ${unlisted.length} tickets`;
 }
 
@@ -755,7 +782,7 @@ async function quit() {
   leaveScreen();
   restoreTitle();
   out.write('syncing order…');
-  await publish();
+  await queue; // the changes still being written and pushed
   out.write(`\r${ESC}K`);
   if (S.message.startsWith('sync:')) console.log(S.message);
   process.exit(0);
