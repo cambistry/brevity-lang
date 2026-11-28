@@ -8,3 +8,4 @@ kanban/tickets/a-one-field-type-declares-self-as-presentations.md
 kanban/tickets/design-a-dir-as-a-view-type.md
 kanban/tickets/design-a-read-only-file-view.md
 kanban/tickets/design-a-view-type-passed-to-a-parameter.md
+kanban/tickets/design-an-atomic-write-of-several-presentations.md
