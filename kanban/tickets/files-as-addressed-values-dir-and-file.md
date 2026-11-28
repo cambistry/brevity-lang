@@ -3,24 +3,54 @@ created: 2026-11-25
 ---
 # Files as addressed values: `Dir` and `File`
 
-Design (a concept, not decided): `notes/files-as-addressed-values-2026-11-25.md`. Mocked up in `kanban/speculative/board.bv`.
+Design: `notes/file-views-and-codecs-2026-11-27.md`, which revises
+`notes/files-as-addressed-values-2026-11-25.md`. Mocked up in `kanban/speculative/board.bv`.
 
 ```brevity
 use Dir, File
 
-type TicketFile = FrontMatter[status Text?, created Text?]
+type TicketMeta(status: Text?, created: Text?)
+type TicketFile Markdown[TicketMeta]
 
-tickets *Map[Text, TicketFile] = Dir("./tickets/*.md")
-columns Lines = File("./columns")
+tickets = Dir[TicketFile]("./tickets/*.md")
+specs List[Text] = File[Lines]("./columns")
 
-tickets[slug].status <- "review"
+tickets[slug]::FrontMatter <! status: "review"
 ```
 
-Want:
+Want: the series below, in order. Each is testable without the ones after it.
 
-- `use Dir, File`: the runtime environment defines them and their limits.
-- A literal path is hoisted into the manifest as a grant; a computed path must fall under a declared grant.
-- The left side gives shape and capability: a snapshot, `&` live read-only, `*` live writable; `<-` through a `*` reference writes the file, and counts as a write for `!`.
-- Entry types own their stored form (`Lines`, `FrontMatter[fields]`, native otherwise); named entries belong to the type; file-system metadata is `:file`.
+Tests:
+- `a-test-suffix-marks-tests-that-need-a-file-system`
 
-Settle the note's open questions first: cell versus reference on the left, concurrency, watch granularity, metadata writes, host-defined addresses, where document types live.
+View types (pure, no files):
+- `a-one-field-type-declares-self-as-presentations`
+- `a-cell-of-a-view-type-takes-writes-through-self-set`
+- `a-named-presentation-is-reached-with-double-colon`
+- `element-writes-and-merge-derive-from-a-collection-presentation`
+- `design-a-view-type-passed-to-a-parameter`
+- `design-generic-one-field-types`
+
+The cell protocol:
+- `a-write-needing-the-current-value-is-a-versioned-write`
+
+Host file actors:
+- `file-should-be-a-host-actor`
+- `every-file-on-one-path-reaches-one-representative`
+- `file-of-c-binds-a-typed-address`
+- `dir-of-c-is-a-keyed-collection-of-files`
+
+The board:
+- `board-bv-s-file-parts-should-use-file-and-dir-views`
+
+Open design, taken up when it blocks something:
+- `design-an-atomic-write-of-several-presentations`
+- `design-a-read-only-file-view`
+- `design-positional-focus-stability-under-sub`
+- `design-a-dir-as-a-view-type`
+- `design-key-focuses-beyond-globs`
+- `design-merge-operator-beside-bang-names`
+
+Separate: `an-annotation-constructs-its-type-from-the-initializer`.
+
+Done when the series is done.

@@ -17,3 +17,5 @@ The decisions to revisit:
   behind `<-` the right spelling, or should it be `cref.set(v)`?
 - **`Ref[C]` was rejected.** Does a value type for an address still have a place, in type fields
   and lists, beside the pointer cell?
+
+The * usage somewhat reverses C dereferencing convention -- though this was discussed long ago.
