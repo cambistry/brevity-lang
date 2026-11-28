@@ -20,3 +20,7 @@ A handler with a list param, sent a list from outside, fails on js; erlang and r
 The js runtime holds a List as a linked list (`{ head, tail }`), and the wire array is never converted. The handler's arrival check (`src/as_check.js`, `checkParams`) emits `_bvAs(xs, {"l": "Integer"}, …)` as a statement: `_bvAs` returns the converted list, and the result is dropped. Fails the same before the `List[…]` spelling change (checked at 93fa852 with `List of Integers`). No test sends a list arg over the wire today.
 
 Expected: a list arg arrives as a list, on all targets, nested lists included.
+
+**Scope (2026-11-27):** a typed public param is bound to its arrival check's result
+(`p T = p as T`), so the wire form is read into the type's own; every target. Tests in
+__tests__/core_types/list_args.test.js.

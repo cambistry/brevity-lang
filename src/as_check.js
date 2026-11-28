@@ -311,7 +311,8 @@ export function lowerAs(ast) {
     for (const p of params) {
       if (!p?.name || p.rest || p.defaultValue || assigned.has(p.name) || p.typeEnc === undefined || p.typeEnc === 'Object') continue;
       const desc = asDescriptor(p.typeEnc, typeDecls);
-      if (desc !== null) checks.push({ type: 'ExprStatement', expr: asExpr({ type: 'Identifier', name: p.name }, p.typeEnc, desc) });
+      // The param is the checked value: the check reads the wire form into the type's own (a List, …).
+      if (desc !== null) checks.push(typedAssign(p.name, p.typeEnc, asExpr({ type: 'Identifier', name: p.name }, p.typeEnc, desc)));
     }
     // Never last: a trailing bare expression would become the reply.
     if (at < fn.body.length) fn.body.splice(at, 0, ...checks);
