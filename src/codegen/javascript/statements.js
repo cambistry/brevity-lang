@@ -417,6 +417,12 @@ export function genFunctionBodyCode(ctx, params, body, outerEnv = null, declared
 
 // A bind inside a branch or loop. A send waits for its reply, and an Object keeps it whole.
 function branchBindValue(ctx, s) {
+  // A typed bind from a child: the child's projection to the type, as a body's bind.
+  if (s.type === 'TypedAssign' && s.value?.type === 'Identifier' && s.typeNameEnc !== undefined && ctx.childActorVars?.has(s.value.name)) {
+    const resolved = ctx.ssaScope?.get(s.value.name) || s.value.name;
+    const target = ctx.childActorVars.get(s.value.name) ? `${resolved}.value` : resolved;
+    return `(await this.#childSend(${target}, [${JSON.stringify(typeText(s.typeNameEnc, ctx.depAliases))}, "$as"]))[0]`;
+  }
   const code = genExpr(ctx, s.value);
   // The value is the send itself, not arithmetic on what sends gave back.
   if (/^this\.#(childSend|send)\(/.test(code)) {
@@ -819,7 +825,22 @@ export function genLocals(ctx, body, outerEnv) {
     e?.type === 'FunctionCallExpr' && e.callee?.type === 'Identifier' &&
     (ctx.actorNames.has(e.callee.name) || e.callee.name === 'class');
   const refVars = new Set();
-  for (const s of body) {
+  // A branch's statements are this body's too: a child made in one is a child.
+  const allStatements = [];
+  const collect = (list) => {
+    for (const s of list) {
+      allStatements.push(s);
+      const inner = (n) => {
+        if (!n || typeof n !== 'object' || n.type === 'Function') return;
+        if (Array.isArray(n)) { n.forEach(inner); return; }
+        if (n.type === 'IfBranch' && Array.isArray(n.body)) { collect(n.body); return; }
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') inner(n[k]);
+      };
+      inner(s);
+    }
+  };
+  collect(body);
+  for (const s of allStatements) {
     if (s.type === 'RefDecl') {
       refVars.add(s.name);
       if (isActorCtorCall(s.value))

@@ -1268,6 +1268,13 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
     return (t === 'IDENT' || t === 'KEYWORD') && tokens[pos + 1]?.type === 'COLON';
   }
 
+  // An arg's value, with the `as T` it may carry (`f(x as T)`): x as T, as a bind's.
+  function parseArgValue() {
+    const expr = parseExpr();
+    if (isTypeAttestation()) expr.attestedAs = consumeTypeAttestation();
+    return expr;
+  }
+
   function parseCallArgs() {
     expect('LPAREN');
     const _prevBare = bareFuncAllowed;
@@ -1283,10 +1290,10 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
       if (isNamedArgKey()) {
         const key = take().value;
         take();
-        namedArgs[key] = parseExpr();
+        namedArgs[key] = parseArgValue();
         hasNamed = true;
       } else {
-        args.push(parseExpr());
+        args.push(parseArgValue());
       }
     }
     expect('RPAREN');
@@ -1314,7 +1321,7 @@ function parseOnce(tokensIn, { typeOnly = false, typeTree = false, nameChains = 
         // Named arg: key: value
         const name = take().value;
         take(); // COLON
-        const expr = parseExpr();
+        const expr = parseArgValue();
         args.push({ name, expr, typeName: null, positional: false });
       } else {
         const expr = parseExpr();

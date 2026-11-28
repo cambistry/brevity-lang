@@ -407,6 +407,73 @@ function lowerPointerWrites(ast) {
   }
 }
 
+// An `as` on a call's arg (`f(x as T)`, `f(k: x as T)`, `o.m(x as T)`) is a bind's:
+// the arg is x as T, bound first, as `y = x as T; f(y)` binds it (a projection for
+// an actor, a coercion or a check for a value; src/as_check.js lowerAs). An `as`
+// inside a body (a branch, a lambda) is hoisted within that body, where it runs.
+function hoistArgAs(ast) {
+  let seq = 0;
+  const bind = (pre, value, t) => {
+    const name = `__asarg${seq++}`;
+    pre.push({ type: 'TypedAssign', name, typeNameEnc: t, value: { ...value, attestedAsEnc: t } });
+    return { type: 'Identifier', name };
+  };
+  const ownsBody = (n) => Array.isArray(n.body) || n.type === 'Function';
+  const hoistList = (list) => {
+    for (let i = 0; i < list.length; i++) {
+      const pre = [];
+      const visit = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (Array.isArray(n)) { n.forEach(visit); return; }
+        if (ownsBody(n)) { bodies(n); return; }
+        for (const k in n) if (k !== 'loc' && n[k] && typeof n[k] === 'object') visit(n[k]);
+        if (n.type === 'DotCallExpr') {
+          for (const a of n.args || []) {
+            if (a?.typeNameEnc != null) {
+              a.expr = bind(pre, a.expr ?? { type: 'Identifier', name: a.name }, a.typeNameEnc);
+              delete a.typeNameEnc; delete a.typeName;
+            } else if (a?.expr?.attestedAsEnc !== undefined) {
+              const { attestedAsEnc: t, attestedAs: _, ...value } = a.expr;
+              a.expr = bind(pre, value, t);
+            }
+          }
+        }
+        if (n.type === 'FunctionCallExpr') {
+          const args = n.args || [];
+          for (let k = 0; k < args.length; k++) {
+            const a = args[k];
+            if (a?.type === 'NamedArgsBag') {
+              for (const key of Object.keys(a.fields || {})) {
+                const v = a.fields[key];
+                if (v?.attestedAsEnc === undefined) continue;
+                const { attestedAsEnc: t, attestedAs: _, ...value } = v;
+                a.fields[key] = bind(pre, value, t);
+              }
+            } else if (a?.attestedAsEnc !== undefined) {
+              const { attestedAsEnc: t, attestedAs: _, ...value } = a;
+              args[k] = bind(pre, value, t);
+            }
+          }
+        }
+      };
+      visit(list[i]);
+      if (pre.length) { list.splice(i, 0, ...pre); i += pre.length; }
+    }
+  };
+  // A node with a body hoists into it; an expression lambda has none to hoist into.
+  const bodies = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n.body)) hoistList(n.body);
+    for (const k in n) if (k !== 'body' && k !== 'loc' && n[k] && typeof n[k] === 'object') {
+      if (Array.isArray(n[k])) n[k].forEach(bodies); else bodies(n[k]);
+    }
+  };
+  for (const actor of ast.actors || []) {
+    for (const fn of actor.functions || []) if (Array.isArray(fn.body)) hoistList(fn.body);
+    if (Array.isArray(actor.constructorBody)) hoistList(actor.constructorBody);
+  }
+}
+
 // A function that ends in an `if` replies with the value its path ends in:
 // `if (b) { "x" } else { 9 }` replies "x" or 9, each as its own type. When every
 // path ends in a value or a `return`, each path's value becomes its `return`, as
@@ -477,6 +544,7 @@ function validateProgram(ast, options = {}) {
   run.ast = ast;
   checkValueIfReturns(ast);
   lowerTailIfValues(ast);
+  hoistArgAs(ast);
   lowerCellMemberReads(ast);
   lowerPointerWrites(ast);
   checkNullGuards(ast);

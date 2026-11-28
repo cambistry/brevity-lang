@@ -725,11 +725,12 @@ ${subRegLines.join('\n')}
       const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
         const raw = genRustExpr(v, typeEnv, eCtx);
         const t = inferLiteralType(v) ?? inferType(v, typeEnv);
-        return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, orAny(t))});`;
+        const jv = toJsonValue(raw, orAny(t));
+        return `_nm.insert("${k}".to_string(), ${rustTypeWireWrap(`(${jv})`, t) || jv});`;
       }).join(' ');
       opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
     } else {
-      const vals = callArgs.map(a => { const v = genRustExpr(a, typeEnv, eCtx); const t = inferLiteralType(a) ?? inferType(a, typeEnv); return toJsonValue(v, orAny(t)); });
+      const vals = callArgs.map(a => { const v = genRustExpr(a, typeEnv, eCtx); const t = inferLiteralType(a) ?? inferType(a, typeEnv); const jv = toJsonValue(v, orAny(t)); return rustTypeWireWrap(`(${jv})`, t) || jv; });
       opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
     }
     return `{
@@ -1743,7 +1744,12 @@ function genRustBranchBind(s, typeEnv, indent) {
   const callsLocalFunction = s.value?.type === 'FunctionCallExpr' && G.ctx.lambdaVarNames.has(s.value.callee?.name);
   const constructsDep = s.value?.type === 'FunctionCallExpr' && G.ctx.dependencyNames.has(s.value.callee?.name)
     && !G.ctx.destructuredMembers?.has(s.value.callee?.name);
-  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr' || callsLocalFunction || constructsDep) {
+  // An instance made here, or a typed bind from one (its projection), is the walk's too.
+  const enclosingNow = G.ctx.enclosingLocals;
+  const constructsClass = s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && G.ctx.actorInfo?.has(s.value.callee.name);
+  const fromChild = s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier'
+    && (enclosingNow?.childActorRefs?.has(s.value.name) || enclosingNow?.selfSpawnedRefs?.has(s.value.name));
+  if (s.value?.type === 'DotCallExpr' || s.value?.type === 'DotAccessExpr' || callsLocalFunction || constructsDep || constructsClass || fromChild) {
     // A call waits for its reply, as it does outside a branch.
     const enclosing = G.ctx.enclosingLocals || { childActorRefs: new Map() };
     const code = genRustLocals([s], typeEnv, analyzeFunctions([s], new Set(), typeEnv), findMutableVars([s]), indent, undefined, null, enclosing);

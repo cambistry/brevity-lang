@@ -643,9 +643,9 @@ function genRustDispatch(publicFns, privateFns, preInitLambdas = [], constructor
     const val = genRustExpr(clause.expr, asEnv);
     const jsonVal = toJsonValue(val, inferType(clause.expr, asEnv) ?? inferLiteralType(clause.expr));
     if (clause.negated) {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() != "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(Value::Array(vec![${jsonVal}]));\n                ty_re = Some(json!([payload.as_str().unwrap()]));\n                handled = true;\n            }`);
     } else {
-      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(json!([${jsonVal}]));\n                ty_re = Some(json!(["${typeText(clause.targetTypeEnc, G.ctx.depAliases)}"]));\n                handled = true;\n            }`);
+      arms.push(`            "$as" if payload.is_string() && payload.as_str().unwrap() == "${typeText(clause.targetTypeEnc, G.ctx.depAliases)}" => {\n                re = Some(Value::Array(vec![${jsonVal}]));\n                ty_re = Some(json!(["${typeText(clause.targetTypeEnc, G.ctx.depAliases)}"]));\n                handled = true;\n            }`);
     }
   }
   arms.push('            _ => {}');
@@ -944,7 +944,7 @@ function genRustChildDispatch(actor) {
     const t = typeText(clause.targetTypeEnc, G.ctx.depAliases);
     const guard = clause.negated ? `matches!(${target}, Some(t) if t != "${t}")` : `${target} == Some("${t}")`;
     const tag = clause.negated ? `json!([${target}.unwrap_or("")])` : `json!(["${t}"])`;
-    arms.push(`            "$as" if ${guard} => {\n                re = Some(json!([${jsonVal}]));\n                if bv_from_wire_caller(from) { self.wire_tag = Some(${tag}); }\n            }`);
+    arms.push(`            "$as" if ${guard} => {\n                re = Some(Value::Array(vec![${jsonVal}]));\n                if bv_from_wire_caller(from) { self.wire_tag = Some(${tag}); }\n            }`);
   }
   // Each in handle_op's shape (`re`, `ty_re`, `handled`), run as a closure here.
   const lambdaArms = genRustLambdaArms(lambdaStart, privateFns).map((arm) => {

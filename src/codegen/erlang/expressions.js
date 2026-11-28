@@ -1878,12 +1878,19 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
       const args = e.args.map(a => genInner(a)).join(', ');
       return `self_send(${erlOp(e.callee.name)}, [${args}])`;
     }
+    // An `as` check reads the branch's own names.
+    if (e.type === 'AsExpr') {
+      const isCall = e.expr.type === 'FunctionCallExpr' || e.expr.type === 'DotCallExpr' || e.expr.type === 'DotAccessExpr';
+      const inner = genInner(e.expr);
+      return `bv_as(${isCall ? `bv_object_one(bv_object_pack(${inner}))` : inner}, ${erlAsDesc(e.desc)}, ${erlString(typeText(e.typeNameEnc, ctx.depAliases))})`;
+    }
     // Fall back to outer genExpr for complex expressions
     return genExpr(ctx, e, typeEnv, sCtx);
   }
 
   const lines = [];
   let lastAssignVar = null;
+  const branchInstances = new Set();
 
   for (let si = 0; si < body.length; si++) {
     const s = body[si];
@@ -1897,9 +1904,15 @@ function genIfBlockBody(ctx, body, typeEnv, sCtx) {
     if (s.type === 'TypedAssign' || s.type === 'Assign') {
       const renamed = prefix + erlVarName(s.name);
       innerRenames.set(s.name, renamed);
+      // An instance this branch makes.
+      if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorInfo?.has(s.value.callee.name)) branchInstances.add(s.name);
+      else branchInstances.delete(s.name);
       if (s.value?.type === 'FunctionCallExpr' && s.value.callee?.type === 'Identifier' && ctx.actorFnNames.has(s.value.callee.name)) {
         const args = s.value.args.map(a => genInner(a)).join(', ');
         lines.push(`${renamed} = bv_object_one(self_send(${erlOp(s.value.callee.name)}, [${args}]))`);
+      } else if (s.type === 'TypedAssign' && s.typeNameEnc !== undefined && s.value?.type === 'Identifier' && (branchInstances.has(s.value.name) || sCtx?.selfSpawnedRefs?.has(s.value.name))) {
+        // A typed bind from an instance: its projection to the type, as a body's bind.
+        lines.push(`${renamed} = hd(bv_inst_call_(${genInner(s.value)}, <<"$as">>, ${erlString(typeText(s.typeNameEnc, ctx.depAliases))}))`);
       } else {
         lines.push(`${renamed} = ${genInner(s.value)}`);
       }

@@ -963,14 +963,16 @@ function genRustMemberCallAwait(call, typeEnv, I, lines) {
     const namedInserts = Object.entries(namedBag.fields).map(([k, v]) => {
       const raw = genRustExpr(v, typeEnv);
       const t = (inferLiteralType(v) ?? inferType(v, typeEnv));
-      return `_nm.insert("${k}".to_string(), ${toJsonValue(raw, orAny(t))});`;
+      const jv = toJsonValue(raw, orAny(t));
+      return `_nm.insert("${k}".to_string(), ${rustTypeWireWrap(`(${jv})`, t) || jv});`;
     }).join(' ');
     opExpr = `{ let mut _nm = Map::new(); ${namedInserts} Value::Array(vec![Value::Array(vec![Value::Object(_nm)]), json!(${method})]) }`;
   } else {
     const vals = callArgs.map(a => {
       const raw = genRustExpr(a, typeEnv);
       const t = (inferLiteralType(a) ?? inferType(a, typeEnv));
-      return toJsonValue(raw, orAny(t));
+      const jv = toJsonValue(raw, orAny(t));
+      return rustTypeWireWrap(`(${jv})`, t) || jv;
     });
     opExpr = `Value::Array(vec![Value::Array(vec![${vals.join(', ')}]), json!(${method})])`;
   }
@@ -1845,7 +1847,7 @@ function genRustRemoteDotCallAwait(expr, typeEnv, I, lines) {
           : rustOpreTo(expr, (root) => genRustExpr(root, typeEnv));
       const method = JSON.stringify(wireOpOf(expr));
       const positional = expr.args.filter(a => a.positional);
-      const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.typeEnc ?? (a.expr ? (inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv)) : typeEnv.get(a.name)); return toJsonValue(v, orAny(t)); };
+      const genArgValW = a => { const v = a.expr ? genRustExpr(a.expr, typeEnv) : genRustExpr({ type: 'Identifier', name: a.name }, typeEnv); const t = a.typeEnc ?? (a.expr ? (inferLiteralType(a.expr) ?? inferType(a.expr, typeEnv)) : typeEnv.get(a.name)); const jv = toJsonValue(v, orAny(t)); return rustTypeWireWrap(`(${jv})`, t) || jv; };
       let opJson;
       if (positional.length === 0 && named.length === 0) {
         opJson = `json!(${method})`;
@@ -3272,6 +3274,10 @@ function genRustListDestructure(node, typeEnv, I) {
 }
 
 function genRustIfStatementBody(branch, typeEnv, I) {
+  return inRustBranchScope(() => genRustIfStatementLines(branch, new Map(typeEnv), I));
+}
+
+function genRustIfStatementLines(branch, typeEnv, I) {
   const lines = [];
   const stmts = branch.body || (branch.expr ? [{ type: 'ExprStatement', expr: branch.expr }] : []);
   for (const s of stmts) {
@@ -3286,21 +3292,18 @@ function genRustIfStatementBody(branch, typeEnv, I) {
       const val = genRustExpr(s.value, typeEnv);
       const t = typeEnv.get('$' + s.name) || inferLiteralType(s.value);
       lines.push(`${I}self.state.insert("${stateKey(s.name)}".to_string(), ${forceJsonWrap(toJsonValue(val, t))});`);
-    } else if (s.type === 'ExprStatement') {
+    } else if (s.type === 'ExprStatement' || s.type === 'ImplicitReturn') {
+      // A statement `if` has no value: its branch's last expression runs for its effect.
       if (s.expr.type === 'IfExpr') {
         lines.push(genRustIfStatement(s.expr, typeEnv, I));
       } else {
         lines.push(`${I}${genRustExpr(s.expr, typeEnv)};`);
       }
-    } else if (s.type === 'TypedAssign') {
-      // Branch-local — use plain rustIdent (validator forbids rebinding outer
-      // names from inside an if body).
-      let val = genRustExpr(s.value, typeEnv);
-      if ((s.typeNameEnc === 'Text' || s.typeNameEnc === 'Blob') && s.value.type === 'StringLiteral') val += '.to_string()';
-      lines.push(`${I}let ${rustIdent(s.name)}: ${rustType(s.typeNameEnc)} = ${val};`);
-    } else if (s.type === 'Assign') {
-      const val = genRustExpr(s.value, typeEnv);
-      lines.push(`${I}let ${rustIdent(s.name)} = ${val};`);
+    } else if (s.type === 'TypedAssign' || s.type === 'Assign') {
+      // A branch's binds are its own, as a guard's are.
+      lines.push(genRustBranchBind(s, typeEnv, I));
+    } else if (s.type !== 'BareTypeDecl') {
+      throw new Error(`An if block can't hold a ${s.type} statement`);
     }
   }
   return lines.join('\n');

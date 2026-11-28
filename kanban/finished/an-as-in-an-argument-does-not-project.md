@@ -21,3 +21,9 @@ Fails: "'body.append!()' positional arg 1: 'TextDiv' is not assignable to 'HTML:
 Expected: `f(x as T)` passes x's projection to T, as `y = x as T; f(y)` does, on every target.
 
 Related: in a class's projection, a `{{ }}` hole or an attribute expression (`<div id={ id }>`) fails in the browser build ("Unexpected DomConstructor child: interp", "Unexpected attr value type: interp").
+
+**Scope (2026-11-27):** `f(x as T)`, `f(k: x as T)` and `o.m(x as T)` bind the arg first, as
+`y = x as T` does (src/validate.js hoistArgAs); a plain call's and a named arg's `as` parse. Also
+fixed on the way: rust `self as T` arms didn't build (`json!([{…}])`); rust sent a user-type arg in
+its internal form; rust dropped a statement `if`'s last line; `c as T` for a child made in a branch
+failed on every target.

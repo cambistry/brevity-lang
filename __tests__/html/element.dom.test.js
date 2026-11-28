@@ -3297,14 +3297,16 @@ TextDiv = *(initial Text) {
   second = TextDiv("by as")
   other = second as div
   body.append!(other)
+  third = TextDiv("in an arg")
+  body.append!(third as div)
 }
 `;
 
-  it('by an annotation and by as', async () => {
+  it('by an annotation, by as, and by as in an arg', async () => {
     const page = await loadPage(html, { sources: { '/builder.bv': builderSource } });
     const actor = await page.connectActor('builder.bv');
     await actor.sendAsync({ id: '1', op: 'build.' });
-    expect(await page.evaluate(() => [...document.body.querySelectorAll('div')].map(d => d.textContent))).toEqual(['made', 'made']);
+    expect(await page.evaluate(() => [...document.body.querySelectorAll('div')].map(d => d.textContent))).toEqual(['made', 'made', 'made']);
   });
 
   it('through `::` is an error that names the form', () => {
