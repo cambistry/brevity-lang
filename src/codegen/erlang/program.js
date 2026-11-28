@@ -27,6 +27,7 @@ import {
   branchSSAEnv,
   resolveSSAName,
   erlTypeTag,
+  erlTypeWireWrap,
 } from './types.js';
 import {
   genExpr,
@@ -1743,7 +1744,12 @@ ${putLines},
   // A function reads as its address, typed with its signature (src/codegen/fn_signature.js).
   const fnsSeen = inspectableFunctions(actor);
   const testGetClauses = [
-    ...allStateNames.map(n => `        ${erlOp(n)} -> get(${erlStateKey(ctx, n)})`),
+    // A cell reads as a handler replying it would: its wire form.
+    ...allStateNames.map(n => {
+      const raw = `get(${erlStateKey(ctx, n)})`;
+      const t = stateTypeMap.get(n);
+      return `        ${erlOp(n)} -> ${t === 'Object' ? `bv_object_wire(${raw})` : (erlTypeWireWrap(ctx, raw, t) || raw)}`;
+    }),
     ...fnsSeen.map(f => `        ${erlString(fnKey(f))} -> ${erlString(fnAddress(f))}`),
   ].join(';\n');
   const testTypeClauses = [
@@ -1834,8 +1840,11 @@ ${testGetClauses || '                _ -> null'};
 ${testTypeClauses || '                _ -> null'};
                 _ -> null
             end,
-            Resp0 = #{<<"id">> => Id, <<"re">> => [Val], <<"to">> => From},
-            Resp = case BvType of null -> Resp0; _ -> Resp0#{<<"ty">> => [BvType]} end,
+            %% An actor of ours it holds is named by us, with its type, as in a reply.
+            Tag0_ = case BvType of null -> null; _ -> [BvType] end,
+            Raw_ = bv_text_out_([Val], Tag0_),
+            Resp0 = #{<<"id">> => Id, <<"re">> => bv_wire_own_(Raw_), <<"to">> => From},
+            Resp = case bv_wire_own_ty_(Raw_, Tag0_) of null -> Resp0; TyW_ -> Resp0#{<<"ty">> => TyW_} end,
             io:put_chars([json_encode(Resp), $\n]);
         error ->
     case maps:find(<<"set">>, Test) of

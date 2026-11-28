@@ -21,6 +21,7 @@ import {
   genTypeCondition, genValueCondition, genDefaultValue, stateKey,
   genPackedReturn, genCellNotify, jsSlotTag, jsTyOf,
   genSendNew, jsIdent,
+  wireValue,
 } from './expressions.js';
 import {
   genFunctionBodyCode, genLocals, hasBlockBodies, bodyHasEarlyReturn, genSubscribeCall, genIfChain,
@@ -1315,18 +1316,16 @@ ${[...allFieldNames].map(n => `    if (${JSON.stringify(wireLabel(n))} in state)
       return;
     }
     if ('get' in t) {
-      const _vals = {${[...[...allFieldNames].map(n => ` ${JSON.stringify(wireLabel(n))}: this.#${stateKey(n)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnKey(f))}: ${JSON.stringify(fnAddress(f))}`)].join(',')} };
+      // A cell reads as a handler replying it would: its wire form (wireValue).
+      const _vals = {${[...[...allFieldNames].map(n => { const t = stateVarDecls.find(v => v.name === n)?.typeNameEnc ?? (constructorParams.some(p => p.name === n) ? envTypeOf(constructorParams.find(p => p.name === n)) : undefined); return ` ${JSON.stringify(wireLabel(n))}: ${wireValue(ctx, `this.#${stateKey(n)}`, t)}`; }), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnKey(f))}: ${JSON.stringify(fnAddress(f))}`)].join(',')} };
       const _types = {${[...stateVarDecls.map(v => ` ${JSON.stringify(wireLabel(v.name))}: ${JSON.stringify(v.typeNameEnc === undefined ? undefined : typeText(v.typeNameEnc, ctx.depAliases))}`), ...constructorParams.map(p => ` ${JSON.stringify(wireLabel(p.name))}: ${JSON.stringify(typeText(orAny(envTypeOf(p)), ctx.depAliases))}`)].join(',')} };
       const _tyOf = {${[...[...stateVarDecls.map(v => [v.name, v.typeNameEnc]), ...constructorParams.map(p => [p.name, orAny(envTypeOf(p))])].map(([n, ty]) => ` ${JSON.stringify(wireLabel(n))}: () => ${jsSlotTag(ctx, ty, `this.#${stateKey(n)}`)}`), ...inspectableFunctions(actor).map(f => ` ${JSON.stringify(fnKey(f))}: () => (${JSON.stringify(fnSignatureForm(f))})`)].join(',')} };
-      let _v = t.get in _vals ? _vals[t.get] : null;
-      if (_types[t.get] === 'Object' && _v && typeof _v === 'object' && _v.positional) {
-        const _hasPos = _v.positional.length > 0;
-        const _hasNamed = _v.named && Object.keys(_v.named).length > 0;
-        _v = _hasPos && _hasNamed ? [..._v.positional, _v.named] : _hasPos ? _v.positional : _v.named || {};
-      }
-      const _post = { id: message.id, re: [_v], to: message.from };
-      const _tag = _tyOf[t.get]?.();
-      if (_tag != null) _post['ty'] = [_tag];
+      const _v = t.get in _vals ? _vals[t.get] : null;
+      // An actor of ours it holds is named by us, with its type, as in a reply.
+      const _post = { id: message.id, re: ${publishesClasses ? 'this.#_wireOwn([_v])' : '[_v]'}, to: message.from };
+      const _tag0 = _tyOf[t.get]?.();
+      const _tag = ${publishesClasses ? 'this.#_wireOwnTy([_v], _tag0 != null ? [_tag0] : undefined)' : '_tag0 != null ? [_tag0] : undefined'};
+      if (_tag != null) { _post['ty'] = _tag; _post.re = _bv_text_map(_post.re, _post['ty'], _bv_text_esc); }
       this.#binding.post(_post);
     } else if ('set' in t) {
       const _sv = t.set;
@@ -1962,7 +1961,8 @@ export function codegen(ast, options = {}) {
   const typeKeyEntries = [...ctx.typeTable.entries()].map(([name, e]) => `${JSON.stringify(name)}: ${JSON.stringify(e.key)}`).join(', ');
   const wireBlock = `const _bv_types = { ${wireRegistryEntries} };\nconst _bv_type_keys = { ${typeKeyEntries} };\n${WIRE_PREAMBLE}\n\n`;
 
-  return (needsPreamble ? OBJECT_PREAMBLE + '\n\n' : '') +
+  // Any code that names BvObject needs it (an Object cell's reply, say).
+  return (needsPreamble || /\bBvObject\b/.test(classes) ? OBJECT_PREAMBLE + '\n\n' : '') +
          DECIMAL_PREAMBLE + '\n\n' +
          AS_PREAMBLE + '\n\n' +
          EQUALITY_PREAMBLE + '\n\n' +

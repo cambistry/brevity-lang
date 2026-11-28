@@ -109,3 +109,55 @@ describe('test.get — a function', () => {
     );
   });
 });
+
+// A cell reads as a handler replying it does: the same value, in its wire form.
+describe('test.get — a cell reads as a reply of it', () => {
+  const script = `
+    type Point(Integer, Integer)
+    C = *{ @a = () -> 1 }
+    l *List[Integer] = [1, 2]
+    p *Point = Point(3, 4)
+    o *Object = Object(1, k: 2)
+    c = *C()
+    @readC = { return c }
+    @readL = { return l }
+    @readP = { return p }
+    @readO = { return o }
+  `;
+
+  it('a List', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~l' }, from: 't' } },
+      { output: { id: '1', re: [[1, 2]], ty: ['List[Integer]'], to: 't' } },
+      { input: { id: '2', op: 'readL', from: 't' } },
+      { output: { id: '2', re: [[1, 2]], ty: ['List[Integer]'], to: 't' } },
+    );
+  });
+
+  it('a user type', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~p' }, from: 't' } },
+      { output: { id: '1', re: [[3, 4]], ty: [':Point'], to: 't' } },
+      { input: { id: '2', op: 'readP', from: 't' } },
+      { output: { id: '2', re: [[3, 4]], ty: [':Point'], to: 't' } },
+    );
+  });
+
+  it('an actor: its address and its class', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~c' }, from: 't' } },
+      { output: { id: '1', re: ['#<:~C:1>'], ty: [':~C'], to: 't' } },
+      { input: { id: '2', op: 'readC', from: 't' } },
+      { output: { id: '2', re: ['#<:~C:1>'], ty: [':~C'], to: 't' } },
+    );
+  });
+
+  it('an Object', async () => {
+    await expectBehavior(script,
+      { input: { id: '1', test: { get: '~o' }, from: 't' } },
+      { output: { id: '1', re: [[1, { k: 2 }]], ty: ['Object'], to: 't' } },
+      { input: { id: '2', op: 'readO', from: 't' } },
+      { output: { id: '2', re: [[1, { k: 2 }]], ty: ['Object'], to: 't' } },
+    );
+  });
+});

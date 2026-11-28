@@ -1354,19 +1354,21 @@ export function genValue(ctx, expr, name = '_') {
   return givesReply ? `BvObject.one(${code}, ${JSON.stringify(name)})` : code;
 }
 
+// A value of type `t` as a reply carries it: a List as an array, a Decimal as a
+// number, a typed value in its wire shape, an Object as its arg list.
+export function wireValue(ctx, expr, t) {
+  if (leadsWithList(t)) return `_List.toArray(${expr})`;
+  if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
+  // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
+  // form (positional list when all fields are required, named map when any
+  // optional). The ty tag tells the receiver how to read.
+  if (wireTypes(t, ctx.typeDecls).length > 0) return `_bv_to_wire(${expr})`;
+  if (t === 'Object') return `((v) => (v !== null && typeof v === 'object' && Array.isArray(v.positional) ? BvObject.splat(v) : v))(${expr})`;
+  return expr;
+}
+
 export function genReplyField(ctx, field, typeEnv) {
-  const isList = leadsWithList;
-  const isType = t => wireTypes(t, ctx.typeDecls).length > 0;
-  const wrapForReply = (expr, t) => {
-    if (isList(t)) return `_List.toArray(${expr})`;
-    if (t === 'Decimal') return `(${expr} instanceof BvDecimal ? ${expr}.toNumber() : ${expr})`;
-    // Slice 12: typed reply slot — strip the runtime tag and reshape to wire
-    // form (positional list when all fields are required, named map when any
-    // optional). The ty tag tells the receiver how to read.
-    if (isType(t)) return `_bv_to_wire(${expr})`;
-    if (t === 'Object') return `((v) => (v !== null && typeof v === 'object' && Array.isArray(v.positional) ? BvObject.splat(v) : v))(${expr})`;
-    return expr;
-  };
+  const wrapForReply = (expr, t) => wireValue(ctx, expr, t);
   if ('sigil' in field) {
     const name = field.sigil;
     const t = field.typeEnc ?? typeEnv?.get(name);

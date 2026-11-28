@@ -169,6 +169,7 @@ import * as AST from '../../ast.js';
 import {
   G, createRustContext, setCtx, TYPE_MEMBER_OF_FN, TAG_MATCHES_FN, MATCH_TYPES_FN, MATCH_TYPES_POSITIONAL_FN,
   RUST_OBJECT_PREAMBLE, RUST_WIRE_HELPERS, BV_TY_OF_FN,
+  rustTypeWireWrap,
   inferLiteralType,
   toJsonValue, forceJsonWrap, fnReturnsFunction,
   needsDotCallAwait,
@@ -608,7 +609,7 @@ ${sourceArms}
             stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), json!([${toJsonValue(val, pt)}]));`);
           } else {
             const val = genRustExpr(s.value, initTypeEnv);
-            stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), { let _s = ${val}; _s.to_json() });`);
+            stateInitLines.push(`    actor.state.insert("${stateKey(s.name)}".to_string(), { let _s = ${val}; _s.splat() });`);
           }
         } else if (s.value?.type === 'FunctionCallExpr' && G.ctx.actorInfo.has(s.value.callee?.name)) {
           // Local child actor construction — a fresh instance; the cell holds its ref
@@ -742,6 +743,15 @@ ${[...G.ctx.stateVarNames].map(n => `                ${JSON.stringify(wireLabel(
                 _ => None,
             };
             let val = _key.and_then(|k| self.state.get(k)).cloned().unwrap_or(Value::Null);
+            // A cell reads as a handler replying it would: its wire form.
+            let val = match name {
+${[...G.ctx.stateVarNames].map(n => {
+  const t = G.ctx.stateVarDecls.find(d => d.name === n)?.typeNameEnc;
+  const wrap = t === undefined ? null : rustTypeWireWrap('val', t);
+  return wrap ? `                ${JSON.stringify(wireLabel(n))} => ${wrap},` : '';
+}).filter(Boolean).join('\n')}
+                _ => val,
+            };
             let bv_type: Option<&str> = match name {
 ${[...G.ctx.stateVarNames].map(n => {
   const decl = G.ctx.stateVarDecls.find(d => d.name === n);
@@ -751,11 +761,14 @@ ${[...G.ctx.stateVarNames].map(n => {
 }).join('\n')}
                 _ => None,
             };
+            // An actor of ours it holds is named by us, with its type, as in a reply.
+            let ty0: Option<Value> = bv_type.map(|t| json!([t]));
+            let re_arr = bv_text_out(&json!([val]), &ty0);
             let mut resp = Map::new();
             resp.insert("id".to_string(), json!(id));
-            resp.insert("re".to_string(), json!([val]));
+            resp.insert("re".to_string(), ${publishesClasses ? 'self.bv_wire_own(&re_arr)' : 're_arr.clone()'});
             resp.insert("to".to_string(), json!(from));
-            if let Some(t) = bv_type { resp.insert("ty".to_string(), json!([t])); }
+            if let Some(t) = ${publishesClasses ? 'self.bv_wire_own_ty(&re_arr, ty0)' : 'ty0'} { resp.insert("ty".to_string(), t); }
             let _ = self.binding.send(Value::Object(resp));
         } else if let Some(set_val) = test.get("set") {
             let payload = if set_val.is_array() { set_val.clone() } else if set_val.is_object() { set_val.clone() } else { json!([set_val]) };
