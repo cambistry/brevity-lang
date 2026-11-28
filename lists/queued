@@ -17,3 +17,4 @@ kanban/tickets/dir-of-c-is-a-keyed-collection-of-files.md
 kanban/tickets/element-writes-and-merge-derive-from-a-collection-presentation.md
 kanban/tickets/every-file-on-one-path-reaches-one-representative.md
 kanban/tickets/file-of-c-binds-a-typed-address.md
+kanban/tickets/file-should-be-a-host-actor.md
