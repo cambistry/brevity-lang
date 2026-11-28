@@ -15,3 +15,4 @@ kanban/tickets/design-merge-operator-beside-bang-names.md
 kanban/tickets/design-positional-focus-stability-under-sub.md
 kanban/tickets/dir-of-c-is-a-keyed-collection-of-files.md
 kanban/tickets/element-writes-and-merge-derive-from-a-collection-presentation.md
+kanban/tickets/every-file-on-one-path-reaches-one-representative.md
