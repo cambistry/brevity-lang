@@ -2,6 +2,7 @@ kanban/tickets/dogfood-the-kanban-board-in-brevity.md
 kanban/tickets/valueless-attributes.md
 kanban/tickets/implement-return-unhandled-bv-equivalent-of-a-guard.md
 kanban/tickets/full-test-runs-time-out-under-load.md
+kanban/tickets/misapplication-of-the-unhandled-exception-to-addressing.md
 kanban/tickets/the-browser-refuses-file-and-dir.md
 kanban/tickets/a-type-namespace-from-another-file.md
 kanban/tickets/a-thin-node-host-for-compiled-programs.md
