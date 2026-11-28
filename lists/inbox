@@ -63,7 +63,6 @@ kanban/tickets/docs-on-github.md
 kanban/tickets/non-dom-browser-capabilities.md
 kanban/tickets/take-eval-off-document-make-arbitrary-js-an-explicit-grant.md
 kanban/tickets/reference-to-a-foreign-function-svc-fn-not-svc-fn.md
-kanban/tickets/js-a-class-can-t-subscribe-to-a-file-s-private-cell-passed.md
 kanban/tickets/remaining-gaps-in-a-a-a-as-separate-names.md
 kanban/tickets/what-s-the-ty-type-of-a-value-cell.md
 kanban/tickets/keywords-can-t-be-bare-names-inflected-forms-must-work.md
